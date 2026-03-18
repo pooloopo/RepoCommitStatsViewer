@@ -9,7 +9,6 @@ import SelectContent from './SelectContent';
 import MenuContent from './MenuContent';
 import CardAlert from './CardAlert';
 import OptionsMenu from './OptionsMenu';
-import { useUser } from "@clerk/react";
 
 const drawerWidth = 240;
 
@@ -25,7 +24,6 @@ const Drawer = styled(MuiDrawer)({
 });
 
 export default function SideMenu() {
-  const {user} = useUser();
   
   return (
     <Drawer
@@ -68,7 +66,7 @@ export default function SideMenu() {
           borderColor: 'divider',
         }}
       >
-        <Avatar
+        {/*<Avatar
           sizes="small"
           alt="Riley Carter"
           src={user?.imageUrl}
@@ -81,7 +79,7 @@ export default function SideMenu() {
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
             {user?.firstName}
           </Typography>
-        </Box>
+        </Box>*/}
         <OptionsMenu />
       </Stack>
     </Drawer>

@@ -12,7 +12,6 @@ import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import DevicesRoundedIcon from '@mui/icons-material/DevicesRounded';
 import SmartphoneRoundedIcon from '@mui/icons-material/SmartphoneRounded';
 import ConstructionRoundedIcon from '@mui/icons-material/ConstructionRounded';
-import { useAuth } from "@clerk/react";
 import { useEffect, useRef, useState } from 'react';
 import { listOrgs, type Org } from '../../lib/github/listOrgs';
 import { useSnackbar } from 'notistack';
@@ -32,8 +31,8 @@ const ListItemAvatar = styled(MuiListItemAvatar)({
 });
 
 export default function SelectContent() {
-  const initDone = useRef(false);
-  const { getToken } = useAuth();
+  /*const initDone = useRef(false);
+  const { getToken } = localStorage.getItem('github_token');
   const { enqueueSnackbar } = useSnackbar();
   const [reposByOrgNodeId, setReposByOrgNodeId] = useState<Record<string, Repo[]>>();
   const [company, setCompany] = useState('');
@@ -79,14 +78,14 @@ export default function SelectContent() {
 
   const handleChange = (event: SelectChangeEvent) => {
     setCompany(event.target.value as string);
-  };
+  };*/
 
   return (
     <Select
       labelId="company-select"
       id="company-simple-select"
-      value={company}
-      onChange={handleChange}
+      //value={company}
+      //onChange={handleChange}
       displayEmpty
       inputProps={{ 'aria-label': 'Select company' }}
       fullWidth
