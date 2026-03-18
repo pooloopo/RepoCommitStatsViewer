@@ -1,4 +1,3 @@
-import * as React from 'react';
 import MuiAvatar from '@mui/material/Avatar';
 import MuiListItemAvatar from '@mui/material/ListItemAvatar';
 import MenuItem from '@mui/material/MenuItem';
@@ -13,6 +12,11 @@ import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import DevicesRoundedIcon from '@mui/icons-material/DevicesRounded';
 import SmartphoneRoundedIcon from '@mui/icons-material/SmartphoneRounded';
 import ConstructionRoundedIcon from '@mui/icons-material/ConstructionRounded';
+import { useAuth } from "@clerk/react";
+import { useEffect, useRef, useState } from 'react';
+import { listOrgs, type Org } from '../../lib/github/listOrgs';
+import { useSnackbar } from 'notistack';
+import { listRepos, type Repo } from '../../lib/github/listRepos';
 
 const Avatar = styled(MuiAvatar)(({ theme }) => ({
   width: 28,
@@ -28,7 +32,50 @@ const ListItemAvatar = styled(MuiListItemAvatar)({
 });
 
 export default function SelectContent() {
-  const [company, setCompany] = React.useState('');
+  const initDone = useRef(false);
+  const { getToken } = useAuth();
+  const { enqueueSnackbar } = useSnackbar();
+  const [reposByOrgNodeId, setReposByOrgNodeId] = useState<Record<string, Repo[]>>();
+  const [company, setCompany] = useState('');
+
+  useEffect(() => {
+    if (initDone.current) return;
+    initDone.current = true;
+
+    async function init() {
+      const token = (await getToken()) ?? "";
+
+      const response = await listOrgs({ token });
+      if (!response.ok) {
+        enqueueSnackbar(`Failed to list orgs: ${response.status} ${await response.text()}`, { variant: 'error' });
+        return;
+      }
+
+      const orgs = (await response.json()) as Org[];
+      console.log(`orgs:`, orgs);
+
+      const reposByOrgNodeId: Record<string, Repo[]> = {};
+
+      for (const org of orgs) {
+        const orgName = org.url.split("/").pop() ?? "";
+        const response = await listRepos({ token, org: orgName });
+
+        if (!response.ok) {
+          enqueueSnackbar(`Failed to list repos for ${orgName}: ${response.status} ${await response.text()}`, { variant: 'error' });
+          continue;
+        }
+
+        const repos = (await response.json()) as Repo[];
+        reposByOrgNodeId[org.node_id] = repos;
+      }
+
+      setReposByOrgNodeId(reposByOrgNodeId);
+
+      console.log(`reposByOrgNodeId:`, reposByOrgNodeId);
+    }
+
+    void init();
+  }, []);
 
   const handleChange = (event: SelectChangeEvent) => {
     setCompany(event.target.value as string);

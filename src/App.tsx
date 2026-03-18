@@ -1,17 +1,29 @@
 import './App.css'
 import Dashboard from './dashboard/Dashboard'
-import { Show, SignInButton, SignUpButton, UserButton } from '@clerk/react'
-import { useClerk, useUser } from "@clerk/react";
+import { Show, SignIn, SignInButton, SignUpButton, UserButton } from '@clerk/react'
+//import { useClerk, useUser } from "@clerk/react";
+import { SnackbarProvider } from 'notistack';
 
 function App() {
-  const {openSignIn } = useClerk();
+  //const {openSignIn } = useClerk();
   
   return (
     //
-    <>
+    <SnackbarProvider maxSnack={3}>
       <header>
         <Show when="signed-out">
-          {openSignIn()}
+          <SignIn
+            routing="hash"
+
+
+            withSignUp={true}
+            appearance={{
+              elements: {
+                card: "shadow-xl"
+              }
+            }}
+          />
+          
           
         </Show>
         <Show when="signed-in">
@@ -19,7 +31,7 @@ function App() {
           <Dashboard />
         </Show>
       </header>
-    </>
+    </SnackbarProvider>
   )
 }
 
