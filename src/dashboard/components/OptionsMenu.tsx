@@ -20,41 +20,51 @@ const MenuItem = styled(MuiMenuItem)({
 });
 
 export default function OptionsMenu() {
-  const [githubToken, setGithubToken] = useState<string | null>(localStorage.getItem('github_token'));
-    const [user, setUser] = useState<any>(null);
-  const handleLogout = () => {
-    console.log("LOGOUT")
-      signOut(auth);
-      setGithubToken(null);
-      setUser(null);
+  // src/components/LogoutButton.tsx
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      // Clear the token from storage
       localStorage.removeItem('github_token');
-    };
+      
+      // Optional: Force a page reload to clear all states 
+      // or use a context/callback to update the UI
+      window.location.reload(); 
+      
+      console.log("Logged out successfully");
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
+  };
+
+
+
   const fetchCommits = async (owner: string, repo: string) => {
   const token = localStorage.getItem('github_token');
   
-  console.log("ran")
-  if (!token) {
-    console.error("No GitHub token found. Please log in.");
-    return;
-  }
+    if (!token) {
+      console.error("No GitHub token found. Please log in.");
+      return;
+    }
 
-  try {
-    const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/commits`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/vnd.github.v3+json',
-      },
-    });
+    try {
+      const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/commits`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github.v3+json',
+        },
+      });
 
-    if (!response.ok) throw new Error("Failed to fetch commits");
+      if (!response.ok) throw new Error("Failed to fetch commits");
 
-    const commitData = await response.json();
-    console.log("Here is the commit data for your algorithm:", commitData);
-    
-  } catch (error) {
-    console.error("API Error:", error);
-  }
-};
+      const commitData = await response.json();
+      console.log("Here is the commit data for your algorithm:", commitData);
+      
+    } catch (error) {
+      console.error("API Error:", error);
+    }
+  };
 
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
@@ -64,6 +74,7 @@ export default function OptionsMenu() {
   const handleClose = () => {
     setAnchorEl(null);
   };
+  fetchCommits("pooloopo","RepoCommitStatsViewer");
   return (
     <React.Fragment>
       <MenuButton

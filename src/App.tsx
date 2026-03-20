@@ -8,7 +8,6 @@ import { SnackbarProvider } from 'notistack';
 
 function App() {
   const [githubToken, setGithubToken] = useState<string | null>(localStorage.getItem('github_token'));
-  const [user, setUser] = useState<any>(null);
 
   const handleLogin = async () => {
     try {
@@ -22,7 +21,6 @@ function App() {
         // Save the token to state and localStorage so it persists after a refresh
         setGithubToken(token);
         localStorage.setItem('github_token', token);
-        setUser(result.user);
         console.log("Successfully retrieved GitHub Token!");
       }
     } catch (error) {
@@ -30,12 +28,7 @@ function App() {
     }
   };
 
-  const handleLogout = () => {
-    signOut(auth);
-    setGithubToken(null);
-    setUser(null);
-    localStorage.removeItem('github_token');
-  };
+
 
   return (
     <div>
