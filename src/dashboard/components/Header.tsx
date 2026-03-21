@@ -4,6 +4,7 @@ import CustomDatePicker from './CustomDatePicker';
 import NavbarBreadcrumbs from './NavbarBreadcrumbs';
 import MenuButton from './MenuButton';
 import ColorModeIconDropdown from '../../shared-theme/ColorModeIconDropdown';
+import Typography from '@mui/material/Typography';
 
 import Search from './Search';
 
@@ -21,7 +22,10 @@ export default function Header() {
       }}
       spacing={2}
     >
-      <NavbarBreadcrumbs />
+      {/*<NavbarBreadcrumbs />*/}
+      <Typography component="h2" variant="h6" sx={{ mb: 2 }}>
+              Overview
+            </Typography>
       <Stack direction="row" sx={{ gap: 1 }}>
         <Search />
         <CustomDatePicker />
