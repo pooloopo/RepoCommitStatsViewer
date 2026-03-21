@@ -1,91 +1,69 @@
-import './App.css'
-import Dashboard from './dashboard/Dashboard'
-import Header from './dashboard/components/Header'
-import { useState } from 'react';
-import { signInWithPopup, GithubAuthProvider, signOut } from 'firebase/auth';
-import { auth, githubProvider } from './firebase';
-import { SnackbarProvider } from 'notistack';
-import AppTheme from './shared-theme/AppTheme';
-import RepoListPage from './pages/RepoListPage'
-import {
-  chartsCustomizations,
-  dataGridCustomizations,
-  datePickersCustomizations,
-  treeViewCustomizations,
-} from './dashboard/theme/customizations';
+import { Button } from "@/components/ui/button"
+import { AuthProvider } from "./context/AuthContext"
+import RepoListPage from "./pages/RepoListPage"
+import { BrowserRouter as Router, Navigate, Routes, Route } from "react-router-dom"
+import LoginPage from "./pages/LoginPage"
+import RepoStatsPage from "./pages/RepoStatsPage"
+import ProtectedRoute from "./components/ProtectedRoute"
+import ErrorBoundary from "./components/ErrorBoundary"
+import Navbar from "./components/Navbar"
 
-const xThemeComponents = {
-  ...chartsCustomizations,
-  ...dataGridCustomizations,
-  ...datePickersCustomizations,
-  ...treeViewCustomizations,
-};
-
-
-function App() {
-  const [githubToken, setGithubToken] = useState<string | null>(localStorage.getItem('github_token'));
-
-  const handleLogin = async () => {
-    try {
-      const result = await signInWithPopup(auth, githubProvider);
-      
-      // This gives you a GitHub Access Token. You can use it to access the GitHub API.
-      const credential = GithubAuthProvider.credentialFromResult(result);
-      const token = credential?.accessToken;
-
-      if (token) {
-        // Save the token to state and localStorage so it persists after a refresh
-        setGithubToken(token);
-        localStorage.setItem('github_token', token);
-        console.log("Successfully retrieved GitHub Token!");
-      }
-    } catch (error) {
-      console.error("Error during sign in:", error);
-    }
-  };
-
+function ProtectedLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div>
-      <h1>GitPulse / RepoCommitStatsViewer</h1>
-      {!githubToken ? (
-        <button onClick={handleLogin}>Sign in with GitHub</button>
-      ) : (
-        <RepoListPage />
-
-
-      )}
+    <div className="flex flex-col h-screen">
+      <Navbar />
+      <div className="flex-1 overflow-auto">
+        {children}
+      </div>
     </div>
   );
 }
 
-
-/*function App() {  
+export default function App() {
   return (
-    //
-    <SnackbarProvider maxSnack={3}>
-      <header>
-        <Show when="signed-out">
-          <SignIn
-            routing="hash"
-
-
-            withSignUp={true}
-            appearance={{
-              elements: {
-                card: "shadow-xl"
+    <ErrorBoundary>
+      <Router>
+        <AuthProvider>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route
+              path="/repos"
+              element={
+                <ProtectedRoute>
+                  <ProtectedLayout>
+                    <RepoListPage />
+                  </ProtectedLayout>
+                </ProtectedRoute>
               }
-            }}
-          />
-          
-          
-        </Show>
-        <Show when="signed-in">
-          
-          <Dashboard />
-        </Show>
-      </header>
-    </SnackbarProvider>
-  )
-}*/
+            />
+            <Route
+              path="/repo/:owner/:repoName"
+              element={
+                <ProtectedRoute>
+                  <ProtectedLayout>
+                    <RepoStatsPage />
+                  </ProtectedLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/" element={<Navigate to="/repos" replace />} />
+          </Routes>
+        </AuthProvider>
+      </Router>
+    </ErrorBoundary>
+  );
+}
 
-export default App
+ /*<div className="flex min-h-svh p-6">
+      <div className="flex max-w-md min-w-0 flex-col gap-4 text-sm leading-loose">
+        <div>
+          <h1 className="font-medium">Project ready!</h1>
+          <p>You may now add components and start building.</p>
+          <p>We&apos;ve already added the button component for you.</p>
+          <Button className="mt-2">Button</Button>
+        </div>
+        <div className="font-mono text-xs text-muted-foreground">
+          (Press <kbd>d</kbd> to toggle dark mode)
+        </div>
+      </div>
+    </div>*/
