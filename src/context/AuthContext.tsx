@@ -7,6 +7,7 @@ import {
   type User,
   GithubAuthProvider
 } from 'firebase/auth';
+import { getGitHubUserData } from '../services/githubApi';
 
 interface AuthContextType {
   user: User | null;
@@ -36,9 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
-        //need work
-        setGithubUsername(currentUser.displayName || null);
-
+        
         if (!accessToken && currentUser.providerData[0]?.providerId === 'github.com') {
           const credential = GithubAuthProvider.credentialFromResult(
             { user: currentUser } as any
@@ -48,6 +47,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setAccessToken(credential.accessToken);
           }
         }
+        //Use github UID to get commit authorship username (different from displayname)
+        const username = (await getGitHubUserData(currentUser.providerData[0].uid as string)).login
+        setGithubUsername(username || null);
+
       } else {
         setUser(null);
         setGithubUsername(null);
@@ -68,9 +71,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem('github_access_token', credential.accessToken);
         setAccessToken(credential.accessToken);
       }
-
+      //Use github UID to get commit authorship username (different from displayname)
+      const username = (await getGitHubUserData(auth.currentUser?.providerData[0].uid as string)).login
+      setGithubUsername(username || null);
       setUser(result.user);
-      setGithubUsername(result.user.displayName || null);
     } catch (err) {
       const error = err as Error;
       setError(error.message || 'Failed to sign in');

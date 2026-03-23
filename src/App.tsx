@@ -1,4 +1,3 @@
-import { Button } from "@/components/ui/button"
 import { AuthProvider } from "./context/AuthContext"
 import RepoListPage from "./pages/RepoListPage"
 import { BrowserRouter as Router, Navigate, Routes, Route } from "react-router-dom"

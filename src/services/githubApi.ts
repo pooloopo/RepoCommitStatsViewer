@@ -1,4 +1,7 @@
 
+import type { Table } from "dexie";
+import { Octokit, RequestError } from "octokit";
+
 export interface GitHubRepository {
   id: number;
   name: string;
@@ -28,11 +31,11 @@ export interface FetchRepositoriesResponse {
 let rateLimitState: RateLimitInfo | null = null;
 let rateLimitResetTimer: ReturnType<typeof setTimeout> | null = null;
 
-function parseRateLimitInfo(headers: Headers): RateLimitInfo {
+function parseRateLimitInfo(headers: any): RateLimitInfo {
   return {
-    limit: parseInt(headers.get('x-ratelimit-limit') || '60'),
-    remaining: parseInt(headers.get('x-ratelimit-remaining') || '0'),
-    reset: parseInt(headers.get('x-ratelimit-reset') || '0') * 1000
+    limit: parseInt(headers['x-ratelimit-limit'] || '60'),
+    remaining: parseInt(headers['x-ratelimit-remaining'] || '0'),
+    reset: parseInt(headers['x-ratelimit-reset'] || '0') * 1000
   };
 }
 
@@ -63,56 +66,44 @@ export function clearRateLimitState() {
   }
   rateLimitState = null;
 }
-//need work
-export async function listOrgs({ token }: { token: string }) {
-    return await fetch("https://api.github.com/user/orgs", {
-        method: "GET",
-        headers: {
-            Accept: "application/vnd.github+json",
-            Authorization: `Bearer ${token}`,
-            "X-GitHub-Api-Version": "2026-03-10",
-        },
-    })
+// Get Github user data using Github user ID or login username
+export async function getGitHubUserData(githubIdOrLogin : string) {
+  const response = await fetch(
+    `https://api.github.com/user/${githubIdOrLogin}`,
+    { headers: { 'Accept': 'application/json' } }
+  )
+    if (!response.ok) {
+      const err = new Error();
+      err.cause = response.statusText;
+      throw err;
+    }
+    return response.json();
 }
 
 export async function fetchUserRepositories(
-  username: string,
   accessToken: string,
   page: number = 1
 ): Promise<FetchRepositoriesResponse> {
+  const octokit = new Octokit({
+  auth: accessToken // My GitHub OAuth token from Firebase
+  });
   const perPage = 20;
   const offset = (page - 1) * perPage;
 
-  const query = `involves:${username}`;
-  const url = new URL('https://api.github.com/search/repositories');
-  url.searchParams.append('q', query);
-  url.searchParams.append('sort', 'updated');
-  url.searchParams.append('order', 'desc');
-  url.searchParams.append('per_page', perPage.toString());
-  url.searchParams.append('page', page.toString());
-
   try {
-    const response = await fetch(url.toString(), {
-      headers: {
-        'Authorization': `token ${accessToken}`,
-        'Accept': 'application/vnd.github.v3+json'
-      }
+    const response = await octokit.rest.repos.listForAuthenticatedUser({
+      affiliation: 'owner,collaborator,organization_member',
+      sort: 'updated',         // Options: created, updated, pushed, full_name
+      direction: 'desc',       // Options: asc, desc
+      per_page: 20,
     });
 
     const rateLimit = parseRateLimitInfo(response.headers);
     updateRateLimitState(rateLimit);
 
-    if (response.status === 403 && rateLimit.remaining === 0) {
-      throw new Error('RATE_LIMIT_EXCEEDED');
-    }
+    const data = response.data;
 
-    if (!response.ok) {
-      throw new Error(`GitHub API error: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-
-    const repositories = data.items.map((repo: any) => ({
+    const repositories = data.map((repo: any) => ({
       id: repo.id,
       name: repo.name,
       owner: {
@@ -129,13 +120,20 @@ export async function fetchUserRepositories(
     return {
       repositories,
       rateLimitInfo: rateLimit,
-      hasMore: offset + perPage < data.total_count
+      hasMore: offset + perPage < data.length
     };
   } catch (error) {
-    if (error instanceof Error && error.message === 'RATE_LIMIT_EXCEEDED') {
+    if (error instanceof RequestError && error.status) {
+      // Handle API error (e.g., 404 Not Found)
+      if (error.status === 403 && error.message.includes('API rate limit')) {
+        throw new Error(`RATE_LIMIT_EXCEEDED: ${error.message}`);
+      }
+      else{
+        throw new Error(`GitHub API error: ${error.message}`);
+      }
+    } else {
       throw error;
     }
-    throw error;
   }
 }
 

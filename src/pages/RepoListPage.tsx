@@ -25,13 +25,11 @@ export default function RepoListPage() {
 
   const fetchRepositories = useCallback(
     async (pageNum: number = 1) => {
-      console.log(accessToken, githubUsername)
       if (!accessToken || !githubUsername) return;
 
       try {
-        console.log(accessToken)
         setError(null);
-        const response = await fetchUserRepositories(githubUsername, accessToken, pageNum);
+        const response = await fetchUserRepositories(accessToken, pageNum);
         const rateLimit = getRateLimitInfo();
 
         if (pageNum === 1) {
