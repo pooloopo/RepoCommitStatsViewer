@@ -57,10 +57,13 @@ export default function Navbar() {
   return (
     <nav className="border-b border-border bg-card">
       <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <GitHubLogoIcon className="w-6 h-6" />
-          <span className="font-semibold text-foreground">My Contributed Repos</span>
-        </div>
+        <a href={'/repos'} >
+          <div className="flex items-center gap-2">
+            
+              <GitHubLogoIcon className="w-6 h-6" />
+            <span className="font-semibold text-foreground">My Contributed Repos</span>
+          </div>
+        </a>
 
         <div className="flex-1 max-w-sm relative">
           <div className="relative">

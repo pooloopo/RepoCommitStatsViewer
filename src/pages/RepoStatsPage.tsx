@@ -160,7 +160,7 @@ const RepoStatsPage = () => {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap justify-end gap-3">
             <Button variant="outline" className="bg-[#21262d] border-[#30363d]" asChild>
               <a href={`https://github.com/${owner}/${repoName}`} target="_blank" rel="noreferrer">
                 <ExternalLink className="w-4 h-4 mr-2" /> View on GitHub
@@ -170,7 +170,7 @@ const RepoStatsPage = () => {
               <ShieldAlert className="w-4 h-4 mr-2" /> View Debt Audit
             </Button>
             <Button onClick={handleSaveSnapshot} className="bg-[#238636] hover:bg-[#2ea043] text-white">
-              <Save className="w-4 h-4 mr-2" /> Snapshot Current Stats
+              <Save className="w-4 h-4 mr-2" /> Save Snapshot Current Stats to IndexedDB
             </Button>
           </div>
         </header>
@@ -313,9 +313,9 @@ const RepoStatsPage = () => {
                       </div>
                       {c.user}
                     </TableCell>
-                    <TableCell className="text-right">{c.commits}</TableCell>
+                    <TableCell className="text-right text-[#FFFFFF]">{c.commits}</TableCell>
                     <TableCell className="text-right text-[#3fb950]">{c.lines.toLocaleString()}</TableCell>
-                    <TableCell className="text-right">{c.files}</TableCell>
+                    <TableCell className="text-right text-[#FFFFFF]">{c.files}</TableCell>
                     <TableCell className="text-right font-bold text-[#a371f7]">{c.score}</TableCell>
                   </TableRow>
                 ))}
