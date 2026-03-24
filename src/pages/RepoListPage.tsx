@@ -101,7 +101,7 @@ export default function RepoListPage() {
             Your Contributed Repositories
           </h1>
           <p className="text-muted-foreground">
-            Repositories you've contributed to
+            Repositories you've contributed to, sorted by most recently contributed
           </p>
         </div>
 
