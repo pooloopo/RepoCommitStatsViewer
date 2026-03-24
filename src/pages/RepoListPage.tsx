@@ -177,7 +177,30 @@ export default function RepoListPage() {
                   >
                     <ExternalLink className="w-4 h-4" />
                   </Button>
+                  <div className=" top-4 right-4">
+                  <Button 
+                    asChild 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-8 px-3 bg-[#21262d] border-[#30363d] text-[#c9d1d9] hover:bg-[#30363d] hover:text-white"
+                    onClick={(e) => {
+                    e.stopPropagation();
+                    }}
+                  >
+                    <a 
+                      href={repo.html_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 text-xs font-medium"
+                    >
+                      <GitHubLogoIcon className="w-3.5 h-3.5" />
+                        View on GitHub
+                      <ExternalLink className="w-3 h-3 opacity-50" />
+                    </a>
+                  </Button>
                 </div>
+                </div>
+                
               </Card>
             ))}
 
