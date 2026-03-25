@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
         //Use github UID to get commit authorship username (different from displayname)
-        const username = "pooloopo";//(await getGitHubUserData(currentUser.providerData[0].uid as string)).login
+        const username = (await getGitHubUserData(currentUser.providerData[0].uid as string)).login
         setGithubUsername(username || null);
 
       } else {
@@ -72,8 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAccessToken(credential.accessToken);
       }
       //Use github UID to get commit authorship username (different from displayname)
-      //mock username since api is blocked
-      const username = "pooloopo";//(await getGitHubUserData(auth.currentUser?.providerData[0].uid as string)).login
+      const username = (await getGitHubUserData(auth.currentUser?.providerData[0].uid as string)).login
       setGithubUsername(username || null);
       setUser(result.user);
     } catch (err) {

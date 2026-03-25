@@ -1,87 +1,35 @@
-/*import { useParams, useNavigate } from 'react-router-dom';
-import { GitHubLogoIcon } from '@radix-ui/react-icons';
-import { ArrowLeft } from 'lucide-react';
-import { Button } from '../components/ui/button';
-import { Card } from '../components/ui/card';
-
-export default function RepoStatsPage() {
-  const { owner, repoName } = useParams<{ owner: string; repoName: string }>();
-  const navigate = useNavigate();
-
-  return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <Button
-          variant="ghost"
-          onClick={() => navigate('/repos')}
-          className="mb-6 text-accent hover:text-accent hover:bg-accent/10"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Repositories
-        </Button>
-
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <GitHubLogoIcon className="w-8 h-8 text-accent" />
-            <div>
-              <h1 className="text-3xl font-bold text-foreground">
-                {repoName}
-              </h1>
-              <p className="text-muted-foreground">{owner}</p>
-            </div>
-          </div>
-        </div>
-
-        <Card className="p-8 border-border">
-          <div className="text-center">
-            <GitHubLogoIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-foreground mb-2">
-              Repository Statistics
-            </h2>
-            <p className="text-muted-foreground mb-6">
-              Detailed analytics and statistics for {repoName} will be displayed here.
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Features coming soon including:
-            </p>
-            <ul className="mt-4 space-y-2 text-sm text-muted-foreground inline-block">
-              <li>✓ Commit history analysis</li>
-              <li>✓ Contributor statistics</li>
-              <li>✓ Code changes metrics</li>
-              <li>✓ Technical debt tracking</li>
-            </ul>
-          </div>
-        </Card>
-      </div>
-    </div>
-  );
-}
-*/
-import React, { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, GitCommit, FileCode, Activity, Save, 
-  ExternalLink, FileSearch, ShieldAlert, Download, 
-  Calendar, Layers, User, ChevronDown, Search
+  ExternalLink, ShieldAlert, Download, 
+  Calendar, Users, Check, ChevronsUpDown, File
 } from 'lucide-react';
+import { GitHubLogoIcon } from '@radix-ui/react-icons';
 
 // Shadcn UI Components
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { 
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger 
-} from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { 
+  Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList 
+} from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 // Recharts
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
 
-// --- Types & Mock Data ---
 type Metric = 'commits' | 'lines' | 'files' | 'score';
+
+// Mock Data
+const MOCK_FILES = [
+  "src/pages/RepoStatsPage.tsx", "src/App.tsx", "package.json", 
+  "src/components/ui/button.tsx", "public/index.html", "src/lib/utils.ts"
+];
 
 const MOCK_GRAPH_DATA = [
   { day: 'Mon', commits: 5, lines: 450, files: 3, score: 7.2 },
@@ -91,12 +39,13 @@ const MOCK_GRAPH_DATA = [
   { day: 'Fri', commits: 7, lines: 800, files: 9, score: 8.0 },
   { day: 'Sat', commits: 1, lines: 50, files: 1, score: 5.5 },
   { day: 'Sun', commits: 2, lines: 110, files: 2, score: 6.2 },
+  { day: '12', commits: 2, lines: 110, files: 2, score: 6.2 },
 ];
 
 const MOCK_CONTRIBUTORS = [
-  { id: 1, user: 'pooloopo', commits: 45, lines: 3200, files: 28, score: 8.9 },
-  { id: 2, user: 'octocat', commits: 32, lines: 1800, files: 15, score: 7.4 },
-  { id: 3, user: 'dev-alpha', commits: 12, lines: 4500, files: 40, score: 9.5 },
+  { id: 1, user: 'pooloopo', commits: 45, lines: 3200, files: 28, score: 8.9, topFile: 'src/App.tsx' },
+  { id: 2, user: 'octocat', commits: 32, lines: 1800, files: 15, score: 7.4, topFile: 'package.json' },
+  { id: 3, user: 'dev-alpha', commits: 12, lines: 4500, files: 40, score: 9.5, topFile: 'src/pages/RepoStatsPage.tsx' },
 ];
 
 const RepoStatsPage = () => {
@@ -104,219 +53,242 @@ const RepoStatsPage = () => {
   const navigate = useNavigate();
 
   // State
-  const [lastSynced] = useState(new Date().toLocaleString());
   const [graphMetric, setGraphMetric] = useState<Metric>('commits');
   const [rankingMetric, setRankingMetric] = useState<Metric>('commits');
   const [rankingScope, setRankingScope] = useState<'entire' | 'file'>('entire');
-  const [filePath, setFilePath] = useState('');
+  const [selectedFile, setSelectedFile] = useState("");
+  const [openFileSearch, setOpenFileSearch] = useState(false);
 
-  // --- Success Criterion 8: CSV Export ---
-  const handleExportCSV = () => {
-    const headers = "Day,Commits,Lines,Files,AvgScore\n";
-    const csvContent = MOCK_GRAPH_DATA.map(d => 
-      `${d.day},${d.commits},${d.lines},${d.files},${d.score}`
-    ).join("\n");
-    
-    const blob = new Blob([headers + csvContent], { type: 'text/csv' });
+  const metricLabels: Record<Metric, string> = {
+    commits: "Commits",
+    lines: "Lines Changed",
+    files: "Files Changed",
+    score: "Atomic Score"
+  };
+
+  // Logic: Ranking sorting
+  const sortedContributors = useMemo(() => {
+    return [...MOCK_CONTRIBUTORS].sort((a, b) => b[rankingMetric] - a[rankingMetric]);
+  }, [rankingMetric]);
+
+  // CSV Export Logic
+  const downloadCSV = (data: any[], filename: string, headers: string) => {
+    const csvContent = data.map(row => Object.values(row).join(",")).join("\n");
+    const blob = new Blob([headers + "\n" + csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${repoName}_stats_export.csv`;
+    a.download = filename;
     a.click();
   };
 
-  // --- Success Criterion 6: Snapshot ---
-  const handleSaveSnapshot = () => {
-    // This will eventually interface with your Dexie.js database
-    console.log("Saving to IndexedDB...");
-    alert(`Snapshot of ${repoName} saved to GitPulseDB!`);
-  };
-
-  const chartConfig = {
-    value: {
-      label: graphMetric.charAt(0).toUpperCase() + graphMetric.slice(1),
-      color: "#58a6ff",
-    },
-  };
+  const chartConfig = { value: { label: metricLabels[graphMetric], color: "#2563eb" } };
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-[#c9d1d9] p-8 pb-20 font-sans">
+    <div className="min-h-screen bg-slate-50 text-slate-900 p-8 pb-20 font-sans">
       <div className="max-w-7xl mx-auto space-y-8">
         
-        {/* TOP HEADER AREA */}
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#30363d] pb-6">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" onClick={() => navigate('/repos')} className="hover:bg-[#30363d]">
-              <ArrowLeft className="w-4 h-4 mr-2" /> Back
+        {/* HEADER AREA */}
+        <header className="flex flex-col lg:flex-row lg:items-start justify-between gap-6 border-b border-slate-200 pb-6 bg-white p-6 rounded-xl shadow-sm">
+          
+          {/* Left Side: Navigation and Repo Info */}
+          <div className="flex items-start gap-4 flex-1 min-w-0">
+            <Button variant="outline" size="icon" onClick={() => navigate('/repos')} className="shrink-0 mt-1">
+              <ArrowLeft className="w-4 h-4" />
             </Button>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold text-white tracking-tight">{repoName}</h1>
-                <Badge variant="outline" className="border-[#30363d] text-[#8b949e]">Public</Badge>
+            
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                {/* break-words handles the long names, lg:text-3xl keeps it prominent */}
+                <h1 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900 break-words max-w-full">
+                  <span className="text-slate-400 font-normal">{owner} /</span> {repoName}
+                </h1>
+                <Badge variant="outline" className="shrink-0 font-mono text-blue-600 border-blue-200 bg-blue-50 whitespace-nowrap">
+                  Total Commits: 1,248
+                </Badge>
               </div>
-              <p className="text-sm text-[#8b949e] mt-1 flex items-center gap-2">
-                <Calendar className="w-3 h-3" /> Last Synced: {lastSynced}
+              
+              <p className="text-sm text-slate-500 mt-2 flex items-center gap-2">
+                <Calendar className="w-3 h-3" /> Last Synced: {new Date().toLocaleDateString()}
               </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap justify-end gap-3">
-            <Button variant="outline" className="bg-[#21262d] border-[#30363d]" asChild>
+          {/* Right Side: Action Buttons Group */}
+          <div className="flex flex-wrap items-center gap-2 shrink-0 self-start lg:justify-end">
+            <Button variant="outline" size="sm" asChild>
               <a href={`https://github.com/${owner}/${repoName}`} target="_blank" rel="noreferrer">
-                <ExternalLink className="w-4 h-4 mr-2" /> View on GitHub
+                <GitHubLogoIcon className="w-4 h-4 mr-2" /> GitHub
               </a>
             </Button>
-            <Button variant="outline" onClick={() => navigate('/audit')} className="bg-[#21262d] border-[#30363d]">
-              <ShieldAlert className="w-4 h-4 mr-2" /> View Debt Audit
+
+            {/* Compare Contributors Button */}
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => navigate(`/repo/${owner}/${repoName}/compare`)}
+              className="border-slate-200 hover:bg-slate-100"
+            >
+              <Users className="w-4 h-4 mr-2" /> Compare Contributors
             </Button>
-            <Button onClick={handleSaveSnapshot} className="bg-[#238636] hover:bg-[#2ea043] text-white">
-              <Save className="w-4 h-4 mr-2" /> Save Snapshot Current Stats to IndexedDB
+
+            {/* Debt Audit Button */}
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => navigate(`/repo/${owner}/${repoName}/audit`)}
+              className="border-amber-200 text-amber-700 hover:bg-amber-50"
+            >
+              <ShieldAlert className="w-4 h-4 mr-2" /> Debt Audit
+            </Button>
+
+            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white">
+              <Save className="w-4 h-4 mr-2" /> Snapshot
             </Button>
           </div>
         </header>
 
-        {/* STATS OVERVIEW CARDS (Last 24h / 7d) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card className="bg-[#161b22] border-[#30363d]">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-[#8b949e]">Past 24 Hours Activity</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-2xl font-bold text-white">4</p>
-                <p className="text-xs text-[#8b949e]">Commits</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-[#3fb950]">+240</p>
-                <p className="text-xs text-[#8b949e]">Lines Added</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-[#161b22] border-[#30363d]">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-[#8b949e]">Past 7 Days Overview</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-4 gap-2">
-              <MiniStat label="Commits" val="38" />
-              <MiniStat label="Lines" val="2.4k" />
-              <MiniStat label="Files" val="14" />
-              <MiniStat label="Score" val="8.1" />
-            </CardContent>
-          </Card>
+        {/* STAT BUCKETS GRID */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <StatBucket title="Last 24 Hours" commits="4" lines="+240" files="2" score="8.4" />
+          <StatBucket title="Last 7 Days" commits="38" lines="+2,410" files="14" score="8.1" />
+          <StatBucket title="Avg Daily Stats" commits="5.4" lines="680" files="3.2" score="7.9" />
         </div>
 
-        {/* PROGRESS VELOCITY GRAPH SECTION */}
-        <Card className="bg-[#161b22] border-[#30363d]">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-7">
+        {/* GRAPH SECTION */}
+        <Card className="bg-white border-slate-200 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between border-b border-slate-50 pb-6">
             <div>
-              <CardTitle className="text-white">Progress Velocity</CardTitle>
-              <CardDescription>Daily average performance metrics</CardDescription>
+              <CardTitle>Project Velocity</CardTitle>
+              <CardDescription>Visualizing {metricLabels[graphMetric]} trends</CardDescription>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <Select value={graphMetric} onValueChange={(v) => setGraphMetric(v as Metric)}>
-                <SelectTrigger className="w-[180px] bg-[#0d1117] border-[#30363d]">
-                  <SelectValue placeholder="Select Metric" />
-                </SelectTrigger>
-                <SelectContent className="bg-[#161b22] border-[#30363d] text-white">
+                <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
                   <SelectItem value="commits">Commits</SelectItem>
                   <SelectItem value="lines">Lines Changed</SelectItem>
                   <SelectItem value="files">Files Changed</SelectItem>
-                  <SelectItem value="score">Avg Atomic Score</SelectItem>
+                  <SelectItem value="score">Atomic Score</SelectItem>
                 </SelectContent>
               </Select>
-              <Button size="icon" variant="outline" onClick={handleExportCSV} className="border-[#30363d] hover:bg-[#30363d]">
-                <Download className="w-4 h-4" />
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => downloadCSV(MOCK_GRAPH_DATA, "velocity_data.csv", "Day,Commits,Lines,Files,Score")}
+              >
+                <Download className="w-4 h-4 mr-2" /> Export Graph (CSV)
               </Button>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             <ChartContainer config={chartConfig} className="h-[300px] w-full">
               <LineChart data={MOCK_GRAPH_DATA}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#30363d" />
-                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill: '#8b949e', fontSize: 12}} />
-                <YAxis hide />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Line 
-                  type="monotone" 
-                  dataKey={graphMetric} 
-                  stroke="var(--color-value)" 
-                  strokeWidth={3} 
-                  dot={{ r: 4, fill: "var(--color-value)" }} 
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
+                {/* Y Axis enabled and clearly visible */}
+                <YAxis 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{fill: '#64748b', fontSize: 12}} 
+                  width={40}
                 />
+                <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+                <Line type="monotone" dataKey={graphMetric} stroke="var(--color-value)" strokeWidth={3} dot={{ r: 4, fill: "white", strokeWidth: 2 }} />
               </LineChart>
             </ChartContainer>
           </CardContent>
         </Card>
 
-        {/* CONTRIBUTOR RANKING SECTION */}
+        {/* RANKING SECTION */}
         <div className="space-y-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <h2 className="text-xl font-semibold text-white">Top Commit Contributors</h2>
-            <div className="flex flex-wrap items-center gap-3">
-              {/* Filter 1: Metric */}
+            <h2 className="text-xl font-bold text-slate-800">
+              Top {metricLabels[rankingMetric]} Contributors
+            </h2>
+            <div className="flex flex-wrap items-center gap-2">
               <Select value={rankingMetric} onValueChange={(v) => setRankingMetric(v as Metric)}>
-                <SelectTrigger className="w-[140px] bg-[#161b22] border-[#30363d]">
-                  <SelectValue placeholder="Metric" />
-                </SelectTrigger>
-                <SelectContent className="bg-[#161b22] border-[#30363d] text-white">
+                <SelectTrigger className="w-[140px] bg-white"><SelectValue /></SelectTrigger>
+                <SelectContent>
                   <SelectItem value="commits">Commits</SelectItem>
                   <SelectItem value="lines">Lines</SelectItem>
                   <SelectItem value="files">Files</SelectItem>
-                  <SelectItem value="score">Score</SelectItem>
+                  <SelectItem value="score">Atomic Score</SelectItem>
                 </SelectContent>
               </Select>
 
-              {/* Filter 2: Scope */}
-              <Select value={rankingScope} onValueChange={(v) => setRankingScope(v as any)}>
-                <SelectTrigger className="w-[140px] bg-[#161b22] border-[#30363d]">
-                  <SelectValue placeholder="Scope" />
-                </SelectTrigger>
-                <SelectContent className="bg-[#161b22] border-[#30363d] text-white">
-                  <SelectItem value="entire">Entire Repo</SelectItem>
-                  <SelectItem value="file">By File Path</SelectItem>
-                </SelectContent>
-              </Select>
+              {/* Autocomplete File Search */}
+              <Popover open={openFileSearch} onOpenChange={setOpenFileSearch}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-[200px] justify-between bg-white">
+                    {selectedFile ? MOCK_FILES.find((f) => f === selectedFile) : "Search files..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[200px] p-0">
+                  <Command>
+                    <CommandInput placeholder="Search file path..." />
+                    <CommandList>
+                      <CommandEmpty>No file found.</CommandEmpty>
+                      <CommandGroup>
+                        {MOCK_FILES.map((file) => (
+                          <CommandItem
+                            key={file}
+                            value={file}
+                            onSelect={(currentValue) => {
+                              setSelectedFile(currentValue === selectedFile ? "" : currentValue);
+                              setOpenFileSearch(false);
+                            }}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", selectedFile === file ? "opacity-100" : "opacity-0")} />
+                            {file}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
 
-              {rankingScope === 'file' && (
-                <div className="relative w-full md:w-64">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-[#8b949e]" />
-                  <Input 
-                    placeholder="src/components/auth.ts" 
-                    className="pl-9 bg-[#161b22] border-[#30363d] text-white"
-                    value={filePath}
-                    onChange={(e) => setFilePath(e.target.value)}
-                  />
-                </div>
-              )}
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => downloadCSV(sortedContributors, "contributor_ranking.csv", "ID,User,Commits,Lines,Files,Score,TopFile")}
+              >
+                <Download className="w-4 h-4 mr-2" /> Export Ranking (CSV)
+              </Button>
             </div>
           </div>
 
-          <Card className="bg-[#161b22] border-[#30363d] overflow-hidden">
+          <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
             <Table>
-              <TableHeader className="bg-[#0d1117]">
-                <TableRow className="border-[#30363d] hover:bg-transparent">
-                  <TableHead className="text-[#8b949e]">Rank</TableHead>
-                  <TableHead className="text-[#8b949e]">Contributor</TableHead>
-                  <TableHead className="text-right text-[#8b949e]">Commits</TableHead>
-                  <TableHead className="text-right text-[#8b949e]">Lines</TableHead>
-                  <TableHead className="text-right text-[#8b949e]">Files</TableHead>
-                  <TableHead className="text-right text-[#8b949e]">Avg Score</TableHead>
+              <TableHeader className="bg-slate-50">
+                <TableRow>
+                  <TableHead className="w-16">Rank</TableHead>
+                  <TableHead>Contributor</TableHead>
+                  <TableHead className="text-right">Commits</TableHead>
+                  <TableHead className="text-right">Lines</TableHead>
+                  <TableHead className="text-right">Files</TableHead>
+                  <TableHead className="text-right font-bold text-blue-600">Atomic Score</TableHead>
+                  <TableHead className="w-20"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {MOCK_CONTRIBUTORS.map((c, i) => (
-                  <TableRow key={c.id} className="border-[#30363d] hover:bg-[#30363d]/20">
-                    <TableCell className="font-mono text-[#8b949e]">#{i + 1}</TableCell>
-                    <TableCell className="font-medium text-white flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-[#30363d] flex items-center justify-center text-[10px]">
-                        <User className="w-3 h-3" />
-                      </div>
-                      {c.user}
+                {sortedContributors.map((c, i) => (
+                  <TableRow key={c.id}>
+                    <TableCell className="font-mono-bold">#{i + 1}</TableCell>
+                    <TableCell className="font-semibold text-slate-700">{c.user}</TableCell>
+                    <TableCell className="text-right">{c.commits}</TableCell>
+                    <TableCell className="text-right text-green-600">+{c.lines}</TableCell>
+                    <TableCell className="text-right">{c.files}</TableCell>
+                    <TableCell className="text-right text-blue-600 font-bold">{c.score}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" asChild>
+                        <a href={`https://github.com/${owner}/${repoName}/commits?author=${c.user}`} target="_blank" rel="noreferrer">
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
+                      </Button>
                     </TableCell>
-                    <TableCell className="text-right text-[#FFFFFF]">{c.commits}</TableCell>
-                    <TableCell className="text-right text-[#3fb950]">{c.lines.toLocaleString()}</TableCell>
-                    <TableCell className="text-right text-[#FFFFFF]">{c.files}</TableCell>
-                    <TableCell className="text-right font-bold text-[#a371f7]">{c.score}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -329,10 +301,27 @@ const RepoStatsPage = () => {
 };
 
 // --- Helper Components ---
-const MiniStat = ({ label, val }: { label: string, val: string }) => (
-  <div className="border-r border-[#30363d] last:border-0 pr-2">
-    <p className="text-lg font-semibold text-white">{val}</p>
-    <p className="text-[10px] text-[#8b949e] uppercase">{label}</p>
+const StatBucket = ({ title, commits, lines, files, score }: any) => (
+  <Card className="bg-white border-slate-200 shadow-sm">
+    <CardHeader className="pb-2 border-b border-slate-50 mb-4 bg-slate-50/50 rounded-t-xl">
+      <CardTitle className="text-sm font-bold text-slate-500 uppercase tracking-widest">{title}</CardTitle>
+    </CardHeader>
+    <CardContent className="grid grid-cols-2 gap-y-4 gap-x-2">
+      <MiniStat icon={<GitCommit className="w-3 h-3 text-blue-500" />} label="Commits" val={commits} />
+      <MiniStat icon={<FileCode className="w-3 h-3 text-green-500" />} label="Lines" val={lines} />
+      <MiniStat icon={<File className="w-3 h-3 text-orange-500" />} label="Files" val={files} />
+      <MiniStat icon={<Activity className="w-3 h-3 text-purple-500" />} label="Atomic Score" val={score} />
+    </CardContent>
+  </Card>
+);
+
+const MiniStat = ({ icon, label, val }: any) => (
+  <div className="flex items-center gap-3">
+    <div className="p-1.5 bg-slate-100 rounded-md shrink-0">{icon}</div>
+    <div>
+      <p className="text-xs text-slate-400 font-medium leading-none mb-1">{label}</p>
+      <p className="text-sm font-bold text-slate-700">{val}</p>
+    </div>
   </div>
 );
 

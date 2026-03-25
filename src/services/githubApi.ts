@@ -1,7 +1,6 @@
 
 import type { Table } from "dexie";
 import { Octokit, RequestError } from "octokit";
-import { mockResponse } from "./mockResponse";
 
 export interface GitHubRepository {
   id: number;
@@ -85,19 +84,19 @@ export async function fetchUserRepositories(
   accessToken: string,
   page: number = 1
 ): Promise<FetchRepositoriesResponse> {
-  /*const octokit = new Octokit({
+  const octokit = new Octokit({
   auth: accessToken // My GitHub OAuth token from Firebase
-  });*/
+  });
   const perPage = 20;
   const offset = (page - 1) * perPage;
 
   try {
-    const response = mockResponse/* await octokit.rest.repos.listForAuthenticatedUser({
+    const response = await octokit.rest.repos.listForAuthenticatedUser({
       affiliation: 'owner,collaborator,organization_member',
       sort: 'updated',         // Options: created, updated, pushed, full_name
       direction: 'desc',       // Options: asc, desc
       per_page: 20,
-    });*/
+    });
     console.log(response)
     const rateLimit = parseRateLimitInfo(response.headers);
     updateRateLimitState(rateLimit);
