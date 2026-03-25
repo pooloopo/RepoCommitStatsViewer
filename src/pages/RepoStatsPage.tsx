@@ -95,33 +95,13 @@ const RepoStatsPage = () => {
     loadAllStats();
   }, [owner, repoName]);
 
-  const handleSaveSnapshot = async () => {
-    if (!owner || !repoName || !stats7d) return;
-
-    try {
-      await db.snapshots.add({
-        repoName,
-        owner,
-        timestamp: Date.now(),
-        commits: stats7d.commits,
-        lines: stats7d.lines,
-        files: stats7d.files,
-        atomicScore: stats7d.atomicScore
-      });
-      alert("Snapshot saved to local history!");
-      loadHistoricalData(); // Refresh the graph immediately
-    } catch (error) {
-      console.error("Failed to save snapshot:", error);
-    }
-  };
-
   const [graphData, setGraphData] = useState<any[]>([]);
 
   const loadHistoricalData = async () => {
     if (!owner || !repoName) return;
 
     const history = await db.snapshots
-      .where('[owner+repoName]')
+      .where('[owner+repoName+timestamp]')
   .equals([owner, repoName])
       .toArray();
 
@@ -143,9 +123,57 @@ const RepoStatsPage = () => {
     }
   };
 
-useEffect(() => {
-  loadHistoricalData();
-}, [owner, repoName]);
+  useEffect(() => {
+    loadHistoricalData();
+  }, [owner, repoName]);
+
+  const saveDailySnapshot = async (stats: any) => {
+    if (!owner || !repoName || !stats) return;
+
+    // Get the start of the current day (00:00:00)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dayTimestamp = today.getTime();
+
+    try {
+      // Check if a snapshot for THIS repo and THIS day already exists
+      const existingSnapshot = await db.snapshots
+        .where({ owner, repoName, timestamp: dayTimestamp })
+        .first();
+
+      const snapshotData = {
+        owner,
+        repoName,
+        timestamp: dayTimestamp,
+        commits: stats.commits,
+        lines: stats.lines,
+        files: stats.files,
+        atomicScore: stats.atomicScore
+      };
+
+      if (existingSnapshot?.id) {
+        // Update existing record
+        await db.snapshots.update(existingSnapshot.id, snapshotData);
+        console.log("Updated today's snapshot.");
+      } else {
+        // Create new record
+        await db.snapshots.add(snapshotData);
+        console.log("Created new daily snapshot.");
+      }
+
+      // Refresh graph
+      loadHistoricalData();
+    } catch (err) {
+      console.error("Snapshot failed:", err);
+    }
+  };
+
+  // Auto-snapshot when stats arrive
+  useEffect(() => {
+    if (stats24h && !loadingStats) {
+      saveDailySnapshot(stats24h);
+    }
+  }, [stats24h, loadingStats]); // Only triggers when stats are populated
 
   // State
   const [graphMetric, setGraphMetric] = useState<Metric>('commits');
@@ -241,8 +269,10 @@ useEffect(() => {
               <ShieldAlert className="w-4 h-4 mr-2" /> Debt Audit
             </Button>
 
-            <Button onClick={handleSaveSnapshot} size="sm" className="bg-green-600 hover:bg-green-700 text-white">
-              <Save className="w-4 h-4 mr-2" /> Snapshot
+            <Button onClick={saveDailySnapshot} disabled={!stats7d} size="sm" className="bg-green-600 hover:bg-green-700 text-white">
+              <Save className="w-4 h-4 mr-2" /> 
+                {/* Logic: If stats are loading, show "Processing..." */}
+                {!stats24h ? "Loading Stats..." : "Sync Daily Snapshot"}
             </Button>
           </div>
         </header>
