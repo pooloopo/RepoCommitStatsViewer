@@ -130,7 +130,8 @@ const RepoStatsPage = () => {
     loadHistoricalData();
   }, [owner, repoName]);
 
-  const saveDailySnapshot = async () => {
+  //Show alert if clicked
+  const saveDailySnapshot = async (clicked: boolean) => {
     if (!owner || !repoName || !stats24h) return;
 
     // Get the start of the current day (00:00:00)
@@ -142,7 +143,7 @@ const RepoStatsPage = () => {
       // Check if a snapshot for THIS repo and THIS day already exists
       const existingSnapshot = await db.snapshots
         .where('[owner+repoName+timestamp]')
-  .equals([owner, repoName, dayTimestamp])
+        .equals([owner, repoName, dayTimestamp])
         .first();
 
       const snapshotData = {
@@ -158,12 +159,11 @@ const RepoStatsPage = () => {
       if (existingSnapshot?.id) {
         // Update existing record
         await db.snapshots.update(existingSnapshot.id, snapshotData);
-
-        console.log("Updated today's snapshot.");
+        if (clicked)
+        alert("Updated today's snapshot.");
       } else {
         // Create new record
         await db.snapshots.add(snapshotData);
-        console.log("Created new daily snapshot.");
       }
 
       // Refresh graph
@@ -176,7 +176,7 @@ const RepoStatsPage = () => {
   // Auto-snapshot when stats arrive
   useEffect(() => {
     if (stats24h && !loadingStats) {
-      saveDailySnapshot();
+      saveDailySnapshot(false); //Don't show alert since the action wasn't clicked
     }
   }, [stats24h, loadingStats]); // Only triggers when stats are populated
 
@@ -274,7 +274,7 @@ const RepoStatsPage = () => {
               <ShieldAlert className="w-4 h-4 mr-2" /> Debt Audit
             </Button>
 
-            <Button onClick={saveDailySnapshot} disabled={!stats7d} size="sm" className="bg-green-600 hover:bg-green-700 text-white">
+            <Button onClick={() => saveDailySnapshot(true)} disabled={!stats7d} size="sm" className="bg-green-600 hover:bg-green-700 text-white">
               <Save className="w-4 h-4 mr-2" /> 
                 {/* Logic: If stats are loading, show "Processing..." */}
                 {!stats24h ? "Loading Stats..." : "Sync Daily Snapshot"}

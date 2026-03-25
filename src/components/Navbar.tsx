@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GitHubLogoIcon } from '@radix-ui/react-icons';
 import { Search, LogOut, ChevronDown } from 'lucide-react';
@@ -13,6 +13,7 @@ import { Avatar, AvatarImage, AvatarFallback } from './ui/avatar';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { fetchUserRepositories, type GitHubRepository } from '@/services/githubApi';
+import { debounce } from 'lodash';
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -21,21 +22,32 @@ export default function Navbar() {
   const [searchResults, setSearchResults] = useState<GitHubRepository[]>([]);
   const [showResults, setShowResults] = useState(false);
 
-  useEffect(() => {
-    async function doSearch() {
-      if (accessToken) {
-        const {repositories} = await fetchUserRepositories(5,searchTerm);
-        
-        setSearchResults(repositories.slice(0, 8));
-        
-      } else {
-        setSearchResults([]);
-        setShowResults(false);
-      }
-    }
+  // 1. Memoize the debounced function so it persists across renders
+  const debouncedSearch = useMemo(
+    () =>
+      debounce((query: string) => {
+        async function doSearch() {
+          if (accessToken) {
+            const {repositories} = await fetchUserRepositories(5,query);
+            setSearchResults(repositories.slice(0, 8));
+          } else {
+            setSearchResults([]);
+            setShowResults(false);
+          }
+        }
+        void doSearch();      
+      }, 500),
+    []
+  );
 
-    void doSearch();
-  }, [searchTerm]);
+  // Call the debounced function whenever the dependency changes
+  useEffect(() => {
+    debouncedSearch(searchTerm);
+    // Cleanup: cancel pending debounces if the component unmounts
+    return () => {
+      debouncedSearch.cancel();
+    };
+  }, [searchTerm, debouncedSearch]);
 
   const handleSearchSelect = (repo: GitHubRepository) => {
     navigate(`/repo/${repo.owner}/${repo.name}`);
@@ -93,7 +105,7 @@ export default function Navbar() {
                 <button
                   key={`${repo.owner.login}/${repo.name}`}
                   onClick={() => handleSearchSelect(repo)}
-                  className="w-full text-left px-3 py-2 hover:bg-muted text-sm text-foreground hover:text-accent border-b border-border last:border-0 transition-colors"
+                  className="bg-white w-full text-left px-3 py-2 hover:bg-muted text-sm text-foreground border-b border-border last:border-0 transition-colors"
                 >
                   <div className="font-medium">{repo.name}</div>
                   <div className="text-xs text-muted-foreground">{repo.owner.login}</div>
