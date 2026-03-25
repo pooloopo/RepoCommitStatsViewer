@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 // Recharts
 import { LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { fetchStatsForTimeframe, getTotalRepoCommits, type DetailedStats } from '@/services/githubApi';
+import { db } from '@/db/database';
 
 type Metric = 'commits' | 'lines' | 'files' | 'score';
 
@@ -93,6 +94,58 @@ const RepoStatsPage = () => {
     fetchTotalCount();
     loadAllStats();
   }, [owner, repoName]);
+
+  const handleSaveSnapshot = async () => {
+    if (!owner || !repoName || !stats7d) return;
+
+    try {
+      await db.snapshots.add({
+        repoName,
+        owner,
+        timestamp: Date.now(),
+        commits: stats7d.commits,
+        lines: stats7d.lines,
+        files: stats7d.files,
+        atomicScore: stats7d.atomicScore
+      });
+      alert("Snapshot saved to local history!");
+      loadHistoricalData(); // Refresh the graph immediately
+    } catch (error) {
+      console.error("Failed to save snapshot:", error);
+    }
+  };
+
+  const [graphData, setGraphData] = useState<any[]>([]);
+
+  const loadHistoricalData = async () => {
+    if (!owner || !repoName) return;
+
+    const history = await db.snapshots
+      .where('[owner+repoName]')
+  .equals([owner, repoName])
+      .toArray();
+
+    if (history.length > 0) {
+      // Format for Recharts
+      const formatted = history.map(s => ({
+        day: new Date(s.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+        commits: s.commits,
+        lines: s.lines,
+        files: s.files,
+        score: s.atomicScore,
+        fullDate: s.timestamp // for sorting
+      })).sort((a, b) => a.fullDate - b.fullDate);
+
+      setGraphData(formatted);
+    } else {
+      // Fallback if no snapshots exist yet
+      setGraphData([]); 
+    }
+  };
+
+useEffect(() => {
+  loadHistoricalData();
+}, [owner, repoName]);
 
   // State
   const [graphMetric, setGraphMetric] = useState<Metric>('commits');
@@ -188,7 +241,7 @@ const RepoStatsPage = () => {
               <ShieldAlert className="w-4 h-4 mr-2" /> Debt Audit
             </Button>
 
-            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white">
+            <Button onClick={handleSaveSnapshot} size="sm" className="bg-green-600 hover:bg-green-700 text-white">
               <Save className="w-4 h-4 mr-2" /> Snapshot
             </Button>
           </div>
@@ -247,7 +300,7 @@ const RepoStatsPage = () => {
           </CardHeader>
           <CardContent className="pt-6">
             <ChartContainer config={chartConfig} className="h-[300px] w-full">
-              <LineChart data={MOCK_GRAPH_DATA}>
+              <LineChart data={graphData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
                 {/* Y Axis enabled and clearly visible */}

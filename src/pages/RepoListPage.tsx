@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { ExternalLink } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { fetchUserRepositories, getRateLimitInfo, waitForRateLimitReset } from '../services/githubApi';
-import { syncRepositoriesToDB } from '../services/dbSync';
 import { type GitHubRepository } from '../services/githubApi';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -29,7 +28,7 @@ export default function RepoListPage() {
 
       try {
         setError(null);
-        const response = await fetchUserRepositories(accessToken, pageNum);
+        const response = await fetchUserRepositories(pageNum,"");
         const rateLimit = getRateLimitInfo();
 
         if (pageNum === 1) {
@@ -37,8 +36,7 @@ export default function RepoListPage() {
         } else {
           setRepositories((prev) => [...prev, ...response.repositories]);
         }
-
-        await syncRepositoriesToDB(response.repositories);
+        //await db.delete(); // Deletes the entire database
         setHasMore(response.hasMore);
         setPage(pageNum);
 

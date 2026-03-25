@@ -1,16 +1,20 @@
 
 import type { Table } from "dexie";
 import { Octokit, RequestError } from "octokit";
+import { useAuth } from "@/context/AuthContext";
 
 let octokit : Octokit;
+let githubUsername: string;
+
 export const setOctokit = (newOctoKit: Octokit) => { octokit = newOctoKit; };
+export const setGithubUsernameForGithubAPI = (newGithubUsername: string) => { githubUsername = newGithubUsername; };
 
 export interface GitHubRepository {
   id: number;
   name: string;
   owner: {
     login: string;
-    avatar_url: string;
+    avatar_url?: string;
   };
   updated_at: string;
   html_url: string;
@@ -76,7 +80,7 @@ export function clearRateLimitState() {
   }
   rateLimitState = null;
 }
-// Get Github user data using Github user ID or login username
+// Get any Github user data using Github user ID or login username
 export async function getGitHubUserData(githubIdOrLogin : string) {
   const response = await fetch(
     `https://api.github.com/user/${githubIdOrLogin}`,
@@ -91,43 +95,45 @@ export async function getGitHubUserData(githubIdOrLogin : string) {
 }
 
 export async function fetchUserRepositories(
-  accessToken: string,
-  page: number = 1
+  page: number = 1, searchTerm: string
 ): Promise<FetchRepositoriesResponse> {
   const perPage = 20;
   const offset = (page - 1) * perPage;
 
   try {
-    const response = await octokit.rest.repos.listForAuthenticatedUser({
+    let response;
+    let data
+    if (searchTerm && searchTerm.trim().length > 0) {
+      // Search for repositories matching the letters (Best Match)
+      response = await octokit.rest.search.repos({
+        q: `user:${githubUsername} ${searchTerm}` ,
+        order: "desc",
+        per_page: 10,
+      });
+      data = response.data.items;
+    } else {
+      // No search term: Get most recently updated repos for the user
+      response = await octokit.rest.repos.listForAuthenticatedUser({
+        sort: "updated",
+        direction: "desc",
+        per_page: 10,
+      });
+      data = response.data;
+    }
+    /*const response = await octokit.rest.repos.listForAuthenticatedUser({
       affiliation: 'owner,collaborator,organization_member',
       sort: 'updated',         // Options: created, updated, pushed, full_name
       direction: 'desc',       // Options: asc, desc
       per_page: 20,
-    });
-    console.log(response)
+    });*/
     const rateLimit = parseRateLimitInfo(response.headers);
     updateRateLimitState(rateLimit);
-
-    const data = response.data;
-
-    const repositories = data.map((repo: any) => ({
-      id: repo.id,
-      name: repo.name,
-      owner: {
-        login: repo.owner.login,
-        avatar_url: repo.owner.avatar_url
-      },
-      updated_at: repo.updated_at,
-      html_url: repo.html_url,
-      description: repo.description,
-      stargazers_count: repo.stargazers_count,
-      language: repo.language
-    })) as GitHubRepository[];
-
+    
+    const repositories = data as GitHubRepository[];
     return {
       repositories,
       rateLimitInfo: rateLimit,
-      hasMore: offset + perPage < data.length
+      hasMore: offset + perPage < repositories.length
     };
   } catch (error) {
     if (error instanceof RequestError && error.status) {

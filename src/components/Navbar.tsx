@@ -3,8 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { GitHubLogoIcon } from '@radix-ui/react-icons';
 import { Search, LogOut, ChevronDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { searchRepositoriesInDB } from '../services/dbSync';
-import { type Repository } from '../db/database';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,26 +12,32 @@ import {
 import { Avatar, AvatarImage, AvatarFallback } from './ui/avatar';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
+import { fetchUserRepositories, type GitHubRepository } from '@/services/githubApi';
 
 export default function Navbar() {
   const navigate = useNavigate();
-  const { githubUsername, logout, user } = useAuth();
+  const { accessToken, githubUsername, logout, user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchResults, setSearchResults] = useState<Repository[]>([]);
+  const [searchResults, setSearchResults] = useState<GitHubRepository[]>([]);
   const [showResults, setShowResults] = useState(false);
 
   useEffect(() => {
-    if (searchTerm.trim()) {
-      searchRepositoriesInDB(searchTerm).then((results) => {
-        setSearchResults(results.slice(0, 8));
-      });
-    } else {
-      setSearchResults([]);
-      setShowResults(false);
+    async function doSearch() {
+      if (accessToken) {
+        const {repositories} = await fetchUserRepositories(5,searchTerm);
+        
+        setSearchResults(repositories.slice(0, 8));
+        
+      } else {
+        setSearchResults([]);
+        setShowResults(false);
+      }
     }
+
+    void doSearch();
   }, [searchTerm]);
 
-  const handleSearchSelect = (repo: Repository) => {
+  const handleSearchSelect = (repo: GitHubRepository) => {
     navigate(`/repo/${repo.owner}/${repo.name}`);
     setSearchTerm('');
     setShowResults(false);
@@ -59,8 +63,8 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
         <a href={'/repos'} >
           <div className="flex items-center gap-2">
-            
-              <GitHubLogoIcon className="w-6 h-6" />
+
+            <GitHubLogoIcon className="w-6 h-6" />
             <span className="font-semibold text-foreground">My Contributed Repos</span>
           </div>
         </a>
@@ -77,23 +81,25 @@ export default function Navbar() {
                 setShowResults(true);
               }}
               onKeyDown={handleSearchKeyDown}
-              onFocus={() => searchTerm && setShowResults(true)}
+              onFocus={() => setShowResults(true)}
+              onBlur={() => setShowResults(false)}
               className="pl-9 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
             />
           </div>
 
-          {showResults && searchResults.length > 0 && (
+          {showResults  && (
             <div className="absolute top-full left-0 right-0 mt-1 bg-secondary border border-border rounded-md shadow-lg z-50">
               {searchResults.map((repo) => (
                 <button
-                  key={repo.repoID}
+                  key={`${repo.owner.login}/${repo.name}`}
                   onClick={() => handleSearchSelect(repo)}
                   className="w-full text-left px-3 py-2 hover:bg-muted text-sm text-foreground hover:text-accent border-b border-border last:border-0 transition-colors"
                 >
                   <div className="font-medium">{repo.name}</div>
-                  <div className="text-xs text-muted-foreground">{repo.owner}</div>
+                  <div className="text-xs text-muted-foreground">{repo.owner.login}</div>
                 </button>
               ))}
+              {searchResults.length <= 0 && (<div className="w-full text-left px-3 py-2 font-medium">No results</div>)}
             </div>
           )}
         </div>

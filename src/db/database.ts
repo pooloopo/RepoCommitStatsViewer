@@ -18,10 +18,14 @@ export interface Commit {
 }
 
 export interface Snapshot {
-  snapshotID: string;
-  repoID: string;
+  id?: number;
+  repoName: string;
+  owner: string;
   timestamp: number;
-  avgDailyCommits: number;
+  commits: number;
+  lines: number;
+  files: number;
+  atomicScore: number;
 }
 
 export interface Contributor {
@@ -49,7 +53,7 @@ export class RepoCommitStatsDB extends Dexie {
     this.version(1).stores({
       repositories: 'repoID',
       commits: 'commitID, repoID',
-      snapshots: 'snapshotID, repoID',
+      snapshots: '++id, timestamp, [owner+repoName]', // Indexing for fast lookups
       contributors: 'contributorID',
       technicalDebt: 'debtID, contributorID, commitID'
     });
