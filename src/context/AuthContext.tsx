@@ -7,7 +7,8 @@ import {
   type User,
   GithubAuthProvider
 } from 'firebase/auth';
-import { getGitHubUserData } from '../services/githubApi';
+import { Octokit } from 'octokit';
+import { getGitHubUserData, setOctokit } from '../services/githubApi';
 
 interface AuthContextType {
   user: User | null;
@@ -27,6 +28,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // This runs every time `accessToken` changes
+    setOctokit(new Octokit({
+      auth: accessToken // My GitHub OAuth token from Firebase
+    }));
+  }, [accessToken]);
 
   useEffect(() => {
     const savedToken = localStorage.getItem('github_access_token');

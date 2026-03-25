@@ -2,6 +2,9 @@
 import type { Table } from "dexie";
 import { Octokit, RequestError } from "octokit";
 
+let octokit : Octokit;
+export const setOctokit = (newOctoKit: Octokit) => { octokit = newOctoKit; };
+
 export interface GitHubRepository {
   id: number;
   name: string;
@@ -14,6 +17,13 @@ export interface GitHubRepository {
   description: string | null;
   stargazers_count: number;
   language: string | null;
+}
+
+export interface DetailedStats {
+  commits: number;
+  lines: number;
+  files: number;
+  atomicScore: number;
 }
 
 export interface RateLimitInfo {
@@ -84,9 +94,6 @@ export async function fetchUserRepositories(
   accessToken: string,
   page: number = 1
 ): Promise<FetchRepositoriesResponse> {
-  const octokit = new Octokit({
-  auth: accessToken // My GitHub OAuth token from Firebase
-  });
   const perPage = 20;
   const offset = (page - 1) * perPage;
 
@@ -149,3 +156,87 @@ export async function waitForRateLimitReset(): Promise<void> {
     });
   }
 }
+
+export const getTotalRepoCommits = async (owner: string, repo: string): Promise<number> => {
+  try {
+    const response = await octokit.rest.repos.listCommits({
+      owner,
+      repo,
+      per_page: 1,  // 1 commit per page
+      page: 1,      // Start at page 1
+    });
+
+    // 1. Access the 'link' header from the response
+    const linkHeader = response.headers.link;
+
+    // 2. If there is no link header, it means there is only 1 page (0 or 1 commit)
+    if (!linkHeader) {
+      return response.data.length;
+    }
+
+    // 3. Use Regex to find the 'last' page number in the string
+    // The string looks like: <...&page=1248>; rel="last"
+    const match = linkHeader.match(/page=(\d+)>; rel="last"/);
+    
+    if (match && match[1]) {
+      return parseInt(match[1], 10);
+    }
+
+    return response.data.length;
+  } catch (error) {
+    console.error("Error calculating total commits:", error);
+    return 0;
+  }
+};
+
+export const fetchStatsForTimeframe = async (
+  owner: string, 
+  repo: string, 
+  days: number
+): Promise<DetailedStats> => {
+  try {
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
+    // 1. Get all commit SHAs in the timeframe
+    const commits = await octokit.paginate(octokit.rest.repos.listCommits, {
+      owner,
+      repo,
+      since: since.toISOString(),
+      per_page: 100,
+    });
+
+    let totalLines = 0;
+    let totalFiles = 0;
+    let totalAtomicScore = 0;
+
+    // 2. To get lines/files, we need the "detailed" commit for each SHA
+    // Note: For large repos, this hits rate limits. We limit to the first 20 for safety in this demo.
+    const detailsToFetch = commits.slice(0, 20); 
+
+    const detailedData = await Promise.all(
+      detailsToFetch.map(c => octokit.rest.repos.getCommit({ owner, repo, ref: c.sha }))
+    );
+
+    detailedData.forEach(res => {
+      totalLines += (res.data.stats?.total || 0);
+      totalFiles += (res.data.files?.length || 0);
+      
+      // MOCK ATOMIC SCORE LOGIC (Example for your IA)
+      // High score if changes are small and focused (Atomic)
+      const commitScore = (res.data.stats?.total || 0) < 50 ? 9.5 : 5.0;
+      totalAtomicScore += commitScore;
+    });
+
+    const count = commits.length;
+    return {
+      commits: count,
+      lines: totalLines,
+      files: totalFiles,
+      atomicScore: count > 0 ? parseFloat((totalAtomicScore / detailsToFetch.length).toFixed(1)) : 0
+    };
+  } catch (error) {
+    console.error("Error fetching stats:", error);
+    return { commits: 0, lines: 0, files: 0, atomicScore: 0 };
+  }
+};

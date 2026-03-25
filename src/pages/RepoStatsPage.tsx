@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, GitCommit, FileCode, Activity, Save, 
@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 
 // Recharts
 import { LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { fetchStatsForTimeframe, getTotalRepoCommits, type DetailedStats } from '@/services/githubApi';
 
 type Metric = 'commits' | 'lines' | 'files' | 'score';
 
@@ -51,6 +52,47 @@ const MOCK_CONTRIBUTORS = [
 const RepoStatsPage = () => {
   const { owner, repoName } = useParams();
   const navigate = useNavigate();
+  
+  const [totalCommits, setTotalCommits] = useState<number | null>(null);
+  const [loadingStats, setLoadingStats] = useState(true);
+
+  // States for the 3 buckets
+  const [stats24h, setStats24h] = useState<DetailedStats | null>(null);
+  const [stats7d, setStats7d] = useState<DetailedStats | null>(null);
+  const [statsAvg, setStatsAvg] = useState<DetailedStats | null>(null);
+
+  useEffect(() => {
+    const fetchTotalCount = async () => {
+      if (owner && repoName) {
+        setLoadingStats(true);
+        const count = await getTotalRepoCommits(owner, repoName);
+        setTotalCommits(count);
+        setLoadingStats(false);
+      }
+    };
+    const loadAllStats = async () => {
+      if (!owner || !repoName) return;
+
+      // Fetch 24 hours (1 day)
+      const data24h = await fetchStatsForTimeframe(owner, repoName, 1);
+      setStats24h(data24h);
+
+      // Fetch 7 days
+      const data7d = await fetchStatsForTimeframe(owner, repoName, 7);
+      setStats7d(data7d);
+
+      // Calculate Average Daily (7 day total / 7)
+      setStatsAvg({
+        commits: parseFloat((data7d.commits / 7).toFixed(1)),
+        lines: Math.round(data7d.lines / 7),
+        files: parseFloat((data7d.files / 7).toFixed(1)),
+        atomicScore: data7d.atomicScore // Usually avg of the avg
+      });
+    };
+
+    fetchTotalCount();
+    loadAllStats();
+  }, [owner, repoName]);
 
   // State
   const [graphMetric, setGraphMetric] = useState<Metric>('commits');
@@ -104,7 +146,11 @@ const RepoStatsPage = () => {
                   <span className="text-slate-400 font-normal">{owner} /</span> {repoName}
                 </h1>
                 <Badge variant="outline" className="shrink-0 font-mono text-blue-600 border-blue-200 bg-blue-50 whitespace-nowrap">
-                  Total Commits: 1,248
+                  {loadingStats ? (
+                    "Loading commits..."
+                  ) : (
+                    `Total Commits: ${totalCommits?.toLocaleString()}`
+                  )}
                 </Badge>
               </div>
               
@@ -150,9 +196,27 @@ const RepoStatsPage = () => {
 
         {/* STAT BUCKETS GRID */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <StatBucket title="Last 24 Hours" commits="4" lines="+240" files="2" score="8.4" />
-          <StatBucket title="Last 7 Days" commits="38" lines="+2,410" files="14" score="8.1" />
-          <StatBucket title="Avg Daily Stats" commits="5.4" lines="680" files="3.2" score="7.9" />
+          <StatBucket 
+            title="Last 24 Hours" 
+            commits={stats24h?.commits ?? "Loading..."} 
+            lines={stats24h ? `+${stats24h.lines}` : "Loading..."} 
+            files={stats24h?.files ?? "Loading..."} 
+            score={stats24h?.atomicScore ?? "Loading..."} 
+          />
+          <StatBucket 
+            title="Last 7 Days" 
+            commits={stats7d?.commits ?? "Loading..."} 
+            lines={stats7d ? `+${stats7d.lines}` : "Loading..."} 
+            files={stats7d?.files ?? "Loading..."} 
+            score={stats7d?.atomicScore ?? "Loading..."} 
+          />
+          <StatBucket 
+            title="Avg Daily Stats" 
+            commits={statsAvg?.commits ?? "Loading..."} 
+            lines={statsAvg?.lines ?? "Loading..."} 
+            files={statsAvg?.files ?? "Loading..."} 
+            score={statsAvg?.atomicScore ?? "Loading..."} 
+          />
         </div>
 
         {/* GRAPH SECTION */}
