@@ -99,10 +99,13 @@ const RepoStatsPage = () => {
 
   const loadHistoricalData = async () => {
     if (!owner || !repoName) return;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dayTimestamp = today.getTime();
 
     const history = await db.snapshots
       .where('[owner+repoName+timestamp]')
-  .equals([owner, repoName])
+  .equals([owner, repoName, dayTimestamp])
       .toArray();
 
     if (history.length > 0) {
@@ -127,8 +130,8 @@ const RepoStatsPage = () => {
     loadHistoricalData();
   }, [owner, repoName]);
 
-  const saveDailySnapshot = async (stats: any) => {
-    if (!owner || !repoName || !stats) return;
+  const saveDailySnapshot = async () => {
+    if (!owner || !repoName || !stats24h) return;
 
     // Get the start of the current day (00:00:00)
     const today = new Date();
@@ -138,22 +141,24 @@ const RepoStatsPage = () => {
     try {
       // Check if a snapshot for THIS repo and THIS day already exists
       const existingSnapshot = await db.snapshots
-        .where({ owner, repoName, timestamp: dayTimestamp })
+        .where('[owner+repoName+timestamp]')
+  .equals([owner, repoName, dayTimestamp])
         .first();
 
       const snapshotData = {
         owner,
         repoName,
         timestamp: dayTimestamp,
-        commits: stats.commits,
-        lines: stats.lines,
-        files: stats.files,
-        atomicScore: stats.atomicScore
+        commits: stats24h.commits,
+        lines: stats24h.lines,
+        files: stats24h.files,
+        atomicScore: stats24h.atomicScore
       };
 
       if (existingSnapshot?.id) {
         // Update existing record
         await db.snapshots.update(existingSnapshot.id, snapshotData);
+
         console.log("Updated today's snapshot.");
       } else {
         // Create new record
@@ -171,7 +176,7 @@ const RepoStatsPage = () => {
   // Auto-snapshot when stats arrive
   useEffect(() => {
     if (stats24h && !loadingStats) {
-      saveDailySnapshot(stats24h);
+      saveDailySnapshot();
     }
   }, [stats24h, loadingStats]); // Only triggers when stats are populated
 
@@ -382,7 +387,7 @@ const RepoStatsPage = () => {
                           <CommandItem
                             key={file}
                             value={file}
-                            onSelect={(currentValue) => {
+                            onSelect={(currentValue : string) => {
                               setSelectedFile(currentValue === selectedFile ? "" : currentValue);
                               setOpenFileSearch(false);
                             }}

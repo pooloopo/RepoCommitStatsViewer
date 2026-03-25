@@ -53,7 +53,7 @@ export class RepoCommitStatsDB extends Dexie {
     this.version(1).stores({
       repositories: 'repoID',
       commits: 'commitID, repoID',
-      snapshots: '++id, timestamp, owner, reponame, [owner+repoName+timestamp]', // Indexing for fast lookups
+      snapshots: '++id, owner, reponame, timestamp, [owner+repoName+timestamp]', // Indexing for fast lookups
       contributors: 'contributorID',
       technicalDebt: 'debtID, contributorID, commitID'
     });
