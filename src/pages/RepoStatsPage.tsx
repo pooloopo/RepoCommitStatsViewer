@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { fetchAllTimeContributorStats, fetchContributorRankings, fetchStatsForTimeframe, getTotalRepoCommits, searchRepoFiles, type DetailedStats } from '@/services/githubApi';
 import { db } from '@/db/database';
+import Dexie from 'dexie';
 
 type Metric = 'commits' | 'lines' | 'files' | 'score';
 
@@ -104,7 +105,10 @@ const RepoStatsPage = () => {
 
     const history = await db.snapshots
       .where('[owner+repoName+timestamp]')
-      .equals([owner, repoName, dayTimestamp])
+      .between(
+      [owner, repoName, Dexie.minKey], // Start range
+      [owner, repoName, Dexie.maxKey]  // End range
+    )
       .toArray();
 
     if (history.length > 0) {
@@ -146,8 +150,8 @@ const RepoStatsPage = () => {
         .first();
 
       const snapshotData = {
-        owner,
-        repoName,
+        owner: owner,
+        repoName: repoName,
         timestamp: dayTimestamp,
         commits: stats24h.commits,
         lines: stats24h.lines,
