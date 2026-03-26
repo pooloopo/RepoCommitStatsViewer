@@ -128,7 +128,7 @@ export async function fetchUserRepositories(
     });*/
     const rateLimit = parseRateLimitInfo(response.headers);
     updateRateLimitState(rateLimit);
-    
+
     const repositories = data as GitHubRepository[];
     return {
       repositories,
@@ -189,8 +189,14 @@ export const getTotalRepoCommits = async (owner: string, repo: string): Promise<
     }
 
     return response.data.length;
-  } catch (error) {
-    console.error("Error calculating total commits:", error);
+  } catch (error: any) {
+    console.log(error.status)
+    // 409 Conflict means the repository is empty (no commits yet)
+    if (error.status === 409) {
+      console.warn(`Repository ${owner}/${repo} is empty.`);
+      return 0;
+    }
+    //console.error("Error calculating total commits:", error);
     return 0;
   }
 };
@@ -244,5 +250,134 @@ export const fetchStatsForTimeframe = async (
   } catch (error) {
     console.error("Error fetching stats:", error);
     return { commits: 0, lines: 0, files: 0, atomicScore: 0 };
+  }
+};
+
+export const searchRepoFiles = async (owner: string, repo: string, query: string): Promise<string[]> => {
+  if (!query || query.length < 2) return []; // Don't search for very short strings to save API quota
+
+  try {
+    const response = await octokit.rest.search.code({
+      // The 'q' parameter syntax: "query string" + "repo:owner/repo"
+      q: `${query} filename:${query} repo:${owner}/${repo}`,
+      per_page: 5,
+    });
+
+    // Map the results to just the file paths
+    return response.data.items.map((item: any) => item.path);
+  } catch (error) {
+    console.error("Error searching files:", error);
+    return [];
+  }
+};
+
+/**
+ * Fetches all-time contributor statistics using GitHub's pre-aggregated stats endpoint.
+ * Returns additions, deletions, and commit counts for the top 100 contributors.
+ */
+export const fetchAllTimeContributorStats = async (owner: string, repo: string): Promise<any[]> => {
+  try {
+    const fetchWithRetry = async (retries = 3): Promise<any> => {
+      const response = await octokit.rest.repos.getContributorsStats({
+        owner,
+        repo,
+      });
+
+      // GitHub returns 202 if it's still calculating the stats.
+      if (response.status === 202 && retries > 0) {
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+        return fetchWithRetry(retries - 1);
+      }
+      return response.data;
+    };
+
+    const data = await fetchWithRetry();
+
+    if (!Array.isArray(data)) return [];
+
+    return data.map((contributor: any) => {
+      // weeks contain { w: timestamp, a: additions, d: deletions, c: commits }
+      const totalAdditions = contributor.weeks.reduce((acc: number, w: any) => acc + w.a, 0);
+      const totalDeletions = contributor.weeks.reduce((acc: number, w: any) => acc + w.d, 0);
+      
+      return {
+        user: contributor.author.login,
+        commits: contributor.total,
+        lines: totalAdditions + totalDeletions,
+        // We estimate "files" based on historical average for all-time stats
+        files: Math.round(contributor.total * 1.5), 
+        // All-time Atomic Score: Ratio of lines to commits
+        // Higher score if they make many commits with fewer line changes per commit
+        score: parseFloat(Math.max(1, Math.min(10, 10 - ((totalAdditions + totalDeletions) / (contributor.total * 200)))).toFixed(1))
+      };
+    });
+  } catch (error) {
+    console.error("Error fetching all-time stats:", error);
+    return [];
+  }
+};
+
+/**
+ * Fetches contributors and aggregates their stats.
+ * If path is provided, it only calculates stats for commits touching that file.
+ */
+export const fetchContributorRankings = async (
+  owner: string,
+  repo: string,
+  path?: string
+): Promise<any[]> => {
+  try {
+    // 1. Fetch commits. If path exists, GitHub filters commits by that file.
+    const response = await octokit.paginate(octokit.rest.repos.listCommits, {
+      owner,
+      repo,
+      path: path || undefined,
+      per_page: 100,
+    });
+
+    // 2. Aggregate stats into a Map
+    const contributorMap = new Map();
+
+    // To get lines changed (additions/deletions), we need detailed commit info.
+    // WARNING: In a real IA, fetching 100+ detailed commits will hit rate limits quickly.
+    // We'll limit to the last 30 for the "detailed" lines calculation.
+    const recentCommits = response.slice(0, 30);
+
+    const detailedCommits = await Promise.all(
+      recentCommits.map(c => 
+        octokit.rest.repos.getCommit({ owner, repo, ref: c.sha })
+      )
+    );
+
+    detailedCommits.forEach(res => {
+      const author = res.data.author?.login || 'Unknown';
+      const stats = res.data.stats;
+      const filesChanged = res.data.files?.length || 0;
+
+      if (!contributorMap.has(author)) {
+        contributorMap.set(author, { 
+          user: author, 
+          commits: 0, 
+          lines: 0, 
+          files: 0, 
+          score: 0 
+        });
+      }
+
+      const current = contributorMap.get(author);
+      current.commits += 1;
+      current.lines += stats?.total || 0;
+      current.files += filesChanged;
+      
+      // IA Logic: Atomic Score (Small focused commits = higher score)
+      // Score = 10 - (linesChanged / 100), capped between 1 and 10
+      const commitScore = Math.max(1, Math.min(10, 10 - ((stats?.total || 0) / 100)));
+      current.score = parseFloat(((current.score + commitScore) / 2).toFixed(1));
+    });
+
+    return Array.from(contributorMap.values());
+  } catch (error) {
+    console.error("Error fetching contributor rankings:", error);
+    return [];
   }
 };

@@ -1,8 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, GitCommit, FileCode, Activity, Save, 
-  ExternalLink, ShieldAlert, Download, 
+import {
+  ArrowLeft, GitCommit, FileCode, Activity, Save,
+  ExternalLink, ShieldAlert, Download,
   Calendar, Users, Check, ChevronsUpDown, File
 } from 'lucide-react';
 import { GitHubLogoIcon } from '@radix-ui/react-icons';
@@ -14,22 +14,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { 
-  Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList 
+import {
+  Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
 // Recharts
 import { LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { fetchStatsForTimeframe, getTotalRepoCommits, type DetailedStats } from '@/services/githubApi';
+import { fetchAllTimeContributorStats, fetchContributorRankings, fetchStatsForTimeframe, getTotalRepoCommits, searchRepoFiles, type DetailedStats } from '@/services/githubApi';
 import { db } from '@/db/database';
 
 type Metric = 'commits' | 'lines' | 'files' | 'score';
 
 // Mock Data
 const MOCK_FILES = [
-  "src/pages/RepoStatsPage.tsx", "src/App.tsx", "package.json", 
+  "src/pages/RepoStatsPage.tsx", "src/App.tsx", "package.json",
   "src/components/ui/button.tsx", "public/index.html", "src/lib/utils.ts"
 ];
 
@@ -53,7 +53,7 @@ const MOCK_CONTRIBUTORS = [
 const RepoStatsPage = () => {
   const { owner, repoName } = useParams();
   const navigate = useNavigate();
-  
+
   const [totalCommits, setTotalCommits] = useState<number | null>(null);
   const [loadingStats, setLoadingStats] = useState(true);
 
@@ -63,17 +63,16 @@ const RepoStatsPage = () => {
   const [statsAvg, setStatsAvg] = useState<DetailedStats | null>(null);
 
   useEffect(() => {
-    const fetchTotalCount = async () => {
-      if (owner && repoName) {
-        setLoadingStats(true);
-        const count = await getTotalRepoCommits(owner, repoName);
-        setTotalCommits(count);
-        setLoadingStats(false);
-      }
-    };
-    const loadAllStats = async () => {
-      if (!owner || !repoName) return;
+    if (!owner || !repoName) return;
 
+    const fetchTotalCount = async () => {
+      setLoadingStats(true);
+      const count = await getTotalRepoCommits(owner, repoName);
+      setTotalCommits(count);
+      setLoadingStats(false);
+    };
+
+    const loadAllStats = async () => {
       // Fetch 24 hours (1 day)
       const data24h = await fetchStatsForTimeframe(owner, repoName, 1);
       setStats24h(data24h);
@@ -105,7 +104,7 @@ const RepoStatsPage = () => {
 
     const history = await db.snapshots
       .where('[owner+repoName+timestamp]')
-  .equals([owner, repoName, dayTimestamp])
+      .equals([owner, repoName, dayTimestamp])
       .toArray();
 
     if (history.length > 0) {
@@ -122,7 +121,7 @@ const RepoStatsPage = () => {
       setGraphData(formatted);
     } else {
       // Fallback if no snapshots exist yet
-      setGraphData([]); 
+      setGraphData([]);
     }
   };
 
@@ -160,7 +159,7 @@ const RepoStatsPage = () => {
         // Update existing record
         await db.snapshots.update(existingSnapshot.id, snapshotData);
         if (clicked)
-        alert("Updated today's snapshot.");
+          alert("Updated today's snapshot.");
       } else {
         // Create new record
         await db.snapshots.add(snapshotData);
@@ -194,10 +193,7 @@ const RepoStatsPage = () => {
     score: "Atomic Score"
   };
 
-  // Logic: Ranking sorting
-  const sortedContributors = useMemo(() => {
-    return [...MOCK_CONTRIBUTORS].sort((a, b) => b[rankingMetric] - a[rankingMetric]);
-  }, [rankingMetric]);
+  const chartConfig = { value: { label: metricLabels[graphMetric], color: "#2563eb" } };
 
   // CSV Export Logic
   const downloadCSV = (data: any[], filename: string, headers: string) => {
@@ -210,21 +206,71 @@ const RepoStatsPage = () => {
     a.click();
   };
 
-  const chartConfig = { value: { label: metricLabels[graphMetric], color: "#2563eb" } };
+  const [fileSearchResults, setFileSearchResults] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+
+  // Use a useEffect to debounce the search (wait 500ms after user stops typing)
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(async () => {
+      // Query has to be greater than 2 because Github search indexing requires it
+      if (searchQuery.length >= 2 && owner && repoName) {
+        setIsSearching(true);
+        const results = await searchRepoFiles(owner, repoName, searchQuery);
+        setFileSearchResults(results);
+        setIsSearching(false);
+      } else {
+        setFileSearchResults([]);
+      }
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery, owner, repoName]);
+
+  const [contributors, setContributors] = useState<any[]>([]);
+  const [isRankingLoading, setIsRankingLoading] = useState(false);
+
+  const loadRankings = async () => {
+    if (!owner || !repoName) return;
+    setIsRankingLoading(true);
+
+    let data = [];
+
+    // Logic Switch
+    if (rankingScope === 'entire') {
+      // USE THE ALL-TIME STATS ENDPOINT (Efficient for whole repo)
+      data = await fetchAllTimeContributorStats(owner, repoName);
+    } else {
+      // USE THE COMMIT-BY-COMMIT METHOD (Necessary for specific file filtering)
+      data = await fetchContributorRankings(owner, repoName, selectedFile);
+    }
+
+    setContributors(data);
+    setIsRankingLoading(false);
+  };
+  // Trigger refresh when the file selection or scope changes
+  useEffect(() => {
+    loadRankings();
+  }, [owner, repoName, selectedFile, rankingScope]);
+
+  // Logic for Sorting (Higher is Better)
+  const sortedContributors = useMemo(() => {
+    return [...contributors].sort((a, b) => b[rankingMetric] - a[rankingMetric]);
+  }, [contributors, rankingMetric]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 p-8 pb-20 font-sans">
       <div className="max-w-7xl mx-auto space-y-8">
-        
+
         {/* HEADER AREA */}
         <header className="flex flex-col lg:flex-row lg:items-start justify-between gap-6 border-b border-slate-200 pb-6 bg-white p-6 rounded-xl shadow-sm">
-          
+
           {/* Left Side: Navigation and Repo Info */}
           <div className="flex items-start gap-4 flex-1 min-w-0">
             <Button variant="outline" size="icon" onClick={() => navigate('/repos')} className="shrink-0 mt-1">
               <ArrowLeft className="w-4 h-4" />
             </Button>
-            
+
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                 {/* break-words handles the long names, lg:text-3xl keeps it prominent */}
@@ -239,7 +285,7 @@ const RepoStatsPage = () => {
                   )}
                 </Badge>
               </div>
-              
+
               <p className="text-sm text-slate-500 mt-2 flex items-center gap-2">
                 <Calendar className="w-3 h-3" /> Last Synced: {new Date().toLocaleDateString()}
               </p>
@@ -255,9 +301,9 @@ const RepoStatsPage = () => {
             </Button>
 
             {/* Compare Contributors Button */}
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => navigate(`/repo/${owner}/${repoName}/compare`)}
               className="border-slate-200 hover:bg-slate-100"
             >
@@ -265,9 +311,9 @@ const RepoStatsPage = () => {
             </Button>
 
             {/* Debt Audit Button */}
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => navigate(`/repo/${owner}/${repoName}/audit`)}
               className="border-amber-200 text-amber-700 hover:bg-amber-50"
             >
@@ -275,35 +321,35 @@ const RepoStatsPage = () => {
             </Button>
 
             <Button onClick={() => saveDailySnapshot(true)} disabled={!stats7d} size="sm" className="bg-green-600 hover:bg-green-700 text-white">
-              <Save className="w-4 h-4 mr-2" /> 
-                {/* Logic: If stats are loading, show "Processing..." */}
-                {!stats24h ? "Loading Stats..." : "Sync Daily Snapshot"}
+              <Save className="w-4 h-4 mr-2" />
+              {/* Logic: If stats are loading, show "Processing..." */}
+              {!stats24h ? "Loading Stats..." : "Sync Daily Snapshot"}
             </Button>
           </div>
         </header>
 
         {/* STAT BUCKETS GRID */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <StatBucket 
-            title="Last 24 Hours" 
-            commits={stats24h?.commits ?? "Loading..."} 
-            lines={stats24h ? `+${stats24h.lines}` : "Loading..."} 
-            files={stats24h?.files ?? "Loading..."} 
-            score={stats24h?.atomicScore ?? "Loading..."} 
+          <StatBucket
+            title="Last 24 Hours"
+            commits={stats24h?.commits ?? "Loading..."}
+            lines={stats24h ? `+${stats24h.lines}` : "Loading..."}
+            files={stats24h?.files ?? "Loading..."}
+            score={stats24h?.atomicScore ?? "Loading..."}
           />
-          <StatBucket 
-            title="Last 7 Days" 
-            commits={stats7d?.commits ?? "Loading..."} 
-            lines={stats7d ? `+${stats7d.lines}` : "Loading..."} 
-            files={stats7d?.files ?? "Loading..."} 
-            score={stats7d?.atomicScore ?? "Loading..."} 
+          <StatBucket
+            title="Last 7 Days"
+            commits={stats7d?.commits ?? "Loading..."}
+            lines={stats7d ? `+${stats7d.lines}` : "Loading..."}
+            files={stats7d?.files ?? "Loading..."}
+            score={stats7d?.atomicScore ?? "Loading..."}
           />
-          <StatBucket 
-            title="Avg Daily Stats" 
-            commits={statsAvg?.commits ?? "Loading..."} 
-            lines={statsAvg?.lines ?? "Loading..."} 
-            files={statsAvg?.files ?? "Loading..."} 
-            score={statsAvg?.atomicScore ?? "Loading..."} 
+          <StatBucket
+            title="Avg Daily Stats"
+            commits={statsAvg?.commits ?? "Loading..."}
+            lines={statsAvg?.lines ?? "Loading..."}
+            files={statsAvg?.files ?? "Loading..."}
+            score={statsAvg?.atomicScore ?? "Loading..."}
           />
         </div>
 
@@ -324,9 +370,9 @@ const RepoStatsPage = () => {
                   <SelectItem value="score">Atomic Score</SelectItem>
                 </SelectContent>
               </Select>
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => downloadCSV(MOCK_GRAPH_DATA, "velocity_data.csv", "Day,Commits,Lines,Files,Score")}
               >
                 <Download className="w-4 h-4 mr-2" /> Export Graph (CSV)
@@ -337,12 +383,12 @@ const RepoStatsPage = () => {
             <ChartContainer config={chartConfig} className="h-[300px] w-full">
               <LineChart data={graphData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
+                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
                 {/* Y Axis enabled and clearly visible */}
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{fill: '#64748b', fontSize: 12}} 
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: '#64748b', fontSize: 12 }}
                   width={40}
                 />
                 <ChartTooltip content={<ChartTooltipContent hideLabel />} />
@@ -373,27 +419,38 @@ const RepoStatsPage = () => {
               <Popover open={openFileSearch} onOpenChange={setOpenFileSearch}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="w-[200px] justify-between bg-white">
-                    {selectedFile ? MOCK_FILES.find((f) => f === selectedFile) : "Search files..."}
+                    {selectedFile ? selectedFile.split('/').pop() : "Search files..."}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[200px] p-0">
-                  <Command>
-                    <CommandInput placeholder="Search file path..." />
+                <PopoverContent className="w-[300px] p-0" align="end">
+                  <Command shouldFilter={false}> {/* Set to false because GitHub handles the filtering */}
+                    <CommandInput
+                      placeholder="Type file name (e.g. index.ts)..."
+                      value={searchQuery}
+                      onValueChange={setSearchQuery} // Updates the search query state
+                    />
                     <CommandList>
-                      <CommandEmpty>No file found.</CommandEmpty>
+                      {isSearching && <div className="p-4 text-xs text-center text-slate-500">Searching GitHub...</div>}
+                      {!isSearching && fileSearchResults.length === 0 && searchQuery.length >= 2 && (
+                        <CommandEmpty>No matching files found.</CommandEmpty>
+                      )}
                       <CommandGroup>
-                        {MOCK_FILES.map((file) => (
+                        {fileSearchResults.map((path) => (
                           <CommandItem
-                            key={file}
-                            value={file}
-                            onSelect={(currentValue : string) => {
-                              setSelectedFile(currentValue === selectedFile ? "" : currentValue);
+                            key={path}
+                            value={path}
+                            onSelect={(currentValue) => {
+                              setSelectedFile(currentValue);
+                              setRankingScope('file');
                               setOpenFileSearch(false);
                             }}
                           >
-                            <Check className={cn("mr-2 h-4 w-4", selectedFile === file ? "opacity-100" : "opacity-0")} />
-                            {file}
+                            <Check className={cn("mr-2 h-4 w-4", selectedFile === path ? "opacity-100" : "opacity-0")} />
+                            <div className="flex flex-col overflow-hidden">
+                              <span className="text-sm font-medium truncate">{path.split('/').pop()}</span>
+                              <span className="text-[10px] text-slate-400 truncate">{path}</span>
+                            </div>
                           </CommandItem>
                         ))}
                       </CommandGroup>
@@ -402,8 +459,8 @@ const RepoStatsPage = () => {
                 </PopoverContent>
               </Popover>
 
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="sm"
                 onClick={() => downloadCSV(sortedContributors, "contributor_ranking.csv", "ID,User,Commits,Lines,Files,Score,TopFile")}
               >
@@ -427,7 +484,7 @@ const RepoStatsPage = () => {
               </TableHeader>
               <TableBody>
                 {sortedContributors.map((c, i) => (
-                  <TableRow key={c.id}>
+                  <TableRow key={i}>
                     <TableCell className="font-mono-bold">#{i + 1}</TableCell>
                     <TableCell className="font-semibold text-slate-700">{c.user}</TableCell>
                     <TableCell className="text-right">{c.commits}</TableCell>

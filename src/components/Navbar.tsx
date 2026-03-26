@@ -50,7 +50,7 @@ export default function Navbar() {
   }, [searchTerm, debouncedSearch]);
 
   const handleSearchSelect = (repo: GitHubRepository) => {
-    navigate(`/repo/${repo.owner}/${repo.name}`);
+    navigate(`/repo/${repo.owner.login}/${repo.name}`);
     setSearchTerm('');
     setShowResults(false);
   };
@@ -104,7 +104,10 @@ export default function Navbar() {
               {searchResults.map((repo) => (
                 <button
                   key={`${repo.owner.login}/${repo.name}`}
-                  onClick={() => handleSearchSelect(repo)}
+                  onMouseDown={(e) => {
+                    e.preventDefault(); // Prevents the input from losing focus immediately
+                    handleSearchSelect(repo);
+                  }}
                   className="bg-white w-full text-left px-3 py-2 hover:bg-muted text-sm text-foreground border-b border-border last:border-0 transition-colors"
                 >
                   <div className="font-medium">{repo.name}</div>
