@@ -257,16 +257,27 @@ export const searchRepoFiles = async (owner: string, repo: string, query: string
   if (!query || query.length < 2) return []; // Don't search for very short strings to save API quota
 
   try {
-    const response = await octokit.rest.search.code({
-      // The 'q' parameter syntax: "query string" + "repo:owner/repo"
-      q: `${query} filename:${query} repo:${owner}/${repo}`,
-      per_page: 5,
+    // Get the SHA of the default branch (e.g., 'main')
+    const { data: refData } = await octokit.rest.repos.get({ owner, repo });
+    const defaultBranch = refData.default_branch;
+
+    // Get the full recursive tree using the branch name (or its SHA)
+    // 'recursive: true' fetches all files in all subdirectories
+    const { data: treeData } = await octokit.rest.git.getTree({
+      owner,
+      repo,
+      tree_sha: defaultBranch,
+      recursive: "true",
     });
 
-    // Map the results to just the file paths
-    return response.data.items.map((item: any) => item.path);
-  } catch (error) {
-    console.error("Error searching files:", error);
+    query = query.toLowerCase();
+    // Filter the results for the filename locally using regex
+    const matches = treeData.tree.filter(file => 
+      file.path.replace(/^.*\/(.*)$/, "$1").toLowerCase().includes(query) && file.type === "blob"
+    );
+    return matches.map((match: any) => match.path);
+  } catch (error: any) {
+    console.error(`Error: ${error.message}`);
     return [];
   }
 };
@@ -339,7 +350,6 @@ export const fetchContributorRankings = async (
     const contributorMap = new Map();
 
     // To get lines changed (additions/deletions), we need detailed commit info.
-    // WARNING: In a real IA, fetching 100+ detailed commits will hit rate limits quickly.
     // We'll limit to the last 30 for the "detailed" lines calculation.
     const recentCommits = response.slice(0, 30);
 
@@ -352,24 +362,28 @@ export const fetchContributorRankings = async (
     detailedCommits.forEach(res => {
       const author = res.data.author?.login || 'Unknown';
       const stats = res.data.stats;
-      const filesChanged = res.data.files?.length || 0;
+      //const filesChanged = res.data.files?.length || 0;
 
       if (!contributorMap.has(author)) {
         contributorMap.set(author, { 
           user: author, 
           commits: 0, 
           lines: 0, 
-          files: 0, 
+          files: "Same File", 
           score: 0 
         });
       }
 
       const current = contributorMap.get(author);
       current.commits += 1;
-      current.lines += stats?.total || 0;
-      current.files += filesChanged;
+      // Search for matching filename in files and increment lines changed
+      for (const item of res.data.files!){
+        if (item.filename == path){
+          current.lines += item.changes || 0;
+        }
+      }
       
-      // IA Logic: Atomic Score (Small focused commits = higher score)
+      // Logic: Atomic Score (Small focused commits = higher score)
       // Score = 10 - (linesChanged / 100), capped between 1 and 10
       const commitScore = Math.max(1, Math.min(10, 10 - ((stats?.total || 0) / 100)));
       current.score = parseFloat(((current.score + commitScore) / 2).toFixed(1));
@@ -378,6 +392,128 @@ export const fetchContributorRankings = async (
     return Array.from(contributorMap.values());
   } catch (error) {
     console.error("Error fetching contributor rankings:", error);
+    return [];
+  }
+};
+
+export interface DebtOccurrence {
+  file: string;
+  line: string;
+  lineNumber: number;
+}
+
+export interface DebtCommit {
+  sha: string;
+  author: string;
+  avatarUrl: string;
+  date: string;
+  url: string;
+  linesChanged: number;
+  filesChanged: number;
+  atomicScore: number;
+  occurrences: DebtOccurrence[];
+}
+
+/**
+ * Searches for debt keywords in commits and extracts the code snippets.
+ */
+export const fetchDebtAuditCommits = async (
+  owner: string,
+  repo: string,
+  keyword: string,
+  page: number = 1,
+  author?: string,
+  path?: string,
+  sort: 'desc' | 'asc' = 'desc'
+): Promise<DebtCommit[]> => {
+  try {
+    // 1. Fetch recent commits directly from the Git history
+    const listParams: any = {
+      owner,
+      repo,
+      per_page: 30, // Fetch a chunk of 30 commits to analyze per page
+      page: page,
+    };
+    
+    // Apply filters directly to the listCommits query to optimize
+    if (author && author !== 'all') listParams.author = author;
+    if (path && path !== 'entire') listParams.path = path;
+
+    const response = await octokit.rest.repos.listCommits(listParams);
+    let commits = response.data;
+    
+    // Handle sorting for this chunk
+    if (sort === 'asc') {
+      commits = commits.reverse();
+    }
+
+    // 2. Fetch the detailed patch for each commit concurrently
+    const detailedCommits: DebtCommit[] = [];
+    
+    // We use Promise.all to fetch the details concurrently. 
+    // (In a massive production app, you'd batch these to protect rate limits)
+    const commitDetails = await Promise.all(
+      commits.map(async (c) => {
+         return await octokit.rest.repos.getCommit({ owner, repo, ref: c.sha });
+      })
+    );
+
+    // 3. Manually scan the diffs (patches) for the keyword
+    for (const detailRes of commitDetails) {
+       const files = detailRes.data.files || [];
+       let occurrences: DebtOccurrence[] = [];
+       let totalLines = detailRes.data.stats?.total || 0;
+       let filesChanged = files.length;
+       
+       files.forEach((file: any) => {
+          // Extra safeguard: skip files if path doesn't match
+          if (path && path !== 'entire' && !file.filename.includes(path)) return;
+          
+          if (file.patch) {
+             const patchLines = file.patch.split('\n');
+             let currentLineNumber = 0;
+             
+             patchLines.forEach((line: string) => {
+                // Parse diff hunk headers (@@ -old,len +new,len @@) to track line numbers
+                const hunkMatch = line.match(/^@@ -\d+,\d+ \+(\d+),\d+ @@/);
+                if (hunkMatch) currentLineNumber = parseInt(hunkMatch[1], 10) - 1;
+                
+                if (line.startsWith('+')) currentLineNumber++;
+                if (line.startsWith(' ')) currentLineNumber++;
+                
+                // Manual search for the keyword in added lines
+                if (line.startsWith('+') && line.toLowerCase().includes(keyword.toLowerCase())) {
+                   occurrences.push({
+                      file: file.filename,
+                      line: line.substring(1), // Remove the '+' from the start of the diff line
+                      lineNumber: currentLineNumber
+                   });
+                }
+             });
+          }
+       });
+       
+       // If we found the keyword in this commit, add it to our results
+       if (occurrences.length > 0) {
+          const atomicScore = Math.max(1, Math.min(10, 10 - (totalLines / 100)));
+          
+          detailedCommits.push({
+             sha: detailRes.data.sha,
+             author: detailRes.data.author?.login || detailRes.data.commit.author?.name || 'Unknown',
+             avatarUrl: detailRes.data.author?.avatar_url || '',
+             date: detailRes.data.commit.author?.date || '',
+             url: detailRes.data.html_url,
+             linesChanged: totalLines,
+             filesChanged,
+             atomicScore: parseFloat(atomicScore.toFixed(1)),
+             occurrences
+          });
+       }
+    }
+
+    return detailedCommits;
+  } catch (error) {
+    console.error("Error fetching debt audit:", error);
     return [];
   }
 };

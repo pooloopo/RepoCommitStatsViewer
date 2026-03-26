@@ -1,5 +1,6 @@
 import { AuthProvider } from "./context/AuthContext"
 import RepoListPage from "./pages/RepoListPage"
+import DebtAuditPage from "./pages/DebtAuditPage";
 import { BrowserRouter as Router, Navigate, Routes, Route } from "react-router-dom"
 import LoginPage from "./pages/LoginPage"
 import RepoStatsPage from "./pages/RepoStatsPage"
@@ -45,6 +46,14 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+            <Route 
+              path="/repo/:owner/:repoName/audit" 
+              element={<ProtectedRoute>
+                  <ProtectedLayout>
+                    <DebtAuditPage />
+                  </ProtectedLayout>
+                </ProtectedRoute>
+              } />
             
             <Route path="/" element={<Navigate to="/repos" replace />} />
           </Routes>

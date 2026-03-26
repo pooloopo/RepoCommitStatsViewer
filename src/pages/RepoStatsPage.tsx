@@ -182,8 +182,7 @@ const RepoStatsPage = () => {
   // State
   const [graphMetric, setGraphMetric] = useState<Metric>('commits');
   const [rankingMetric, setRankingMetric] = useState<Metric>('commits');
-  const [rankingScope, setRankingScope] = useState<'entire' | 'file'>('entire');
-  const [selectedFile, setSelectedFile] = useState("");
+  const [rankingFileScope, setRankingFileScope] = useState('entire');
   const [openFileSearch, setOpenFileSearch] = useState(false);
 
   const metricLabels: Record<Metric, string> = {
@@ -237,12 +236,12 @@ const RepoStatsPage = () => {
     let data = [];
 
     // Logic Switch
-    if (rankingScope === 'entire') {
+    if (rankingFileScope === 'entire') {
       // USE THE ALL-TIME STATS ENDPOINT (Efficient for whole repo)
       data = await fetchAllTimeContributorStats(owner, repoName);
     } else {
       // USE THE COMMIT-BY-COMMIT METHOD (Necessary for specific file filtering)
-      data = await fetchContributorRankings(owner, repoName, selectedFile);
+      data = await fetchContributorRankings(owner, repoName, rankingFileScope);
     }
 
     setContributors(data);
@@ -251,7 +250,7 @@ const RepoStatsPage = () => {
   // Trigger refresh when the file selection or scope changes
   useEffect(() => {
     loadRankings();
-  }, [owner, repoName, selectedFile, rankingScope]);
+  }, [owner, repoName, rankingFileScope, rankingFileScope]);
 
   // Logic for Sorting (Higher is Better)
   const sortedContributors = useMemo(() => {
@@ -373,7 +372,7 @@ const RepoStatsPage = () => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => downloadCSV(MOCK_GRAPH_DATA, "velocity_data.csv", "Day,Commits,Lines,Files,Score")}
+                onClick={() => downloadCSV(graphData, "velocity_data.csv", "Day,Commits,Lines,Files,Score")}
               >
                 <Download className="w-4 h-4 mr-2" /> Export Graph (CSV)
               </Button>
@@ -418,46 +417,70 @@ const RepoStatsPage = () => {
               {/* Autocomplete File Search */}
               <Popover open={openFileSearch} onOpenChange={setOpenFileSearch}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-[200px] justify-between bg-white">
-                    {selectedFile ? selectedFile.split('/').pop() : "Search files..."}
+                    <Button 
+                    variant="outline" 
+                    role="combobox"
+                    className="w-[200px] justify-between bg-white text-xs h-8"
+                    >
+                    <span className="truncate">
+                        {rankingFileScope === 'entire' ? "Entire Repository" : rankingFileScope.split('/').pop()}
+                    </span>
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
+                    </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[300px] p-0" align="end">
-                  <Command shouldFilter={false}> {/* Set to false because GitHub handles the filtering */}
-                    <CommandInput
-                      placeholder="Type file name (e.g. index.ts)..."
-                      value={searchQuery}
-                      onValueChange={setSearchQuery} // Updates the search query state
+                <PopoverContent className="w-[300px] p-0" align="start">
+                    <Command shouldFilter={false}>
+                    <CommandInput 
+                        placeholder="Search files (e.g. index.ts)..." 
+                        value={searchQuery}
+                        onValueChange={setSearchQuery}
                     />
                     <CommandList>
-                      {isSearching && <div className="p-4 text-xs text-center text-slate-500">Searching GitHub...</div>}
-                      {!isSearching && fileSearchResults.length === 0 && searchQuery.length >= 2 && (
-                        <CommandEmpty>No matching files found.</CommandEmpty>
-                      )}
-                      <CommandGroup>
+                        {isSearching && <div className="p-4 text-xs text-center text-slate-500">Searching GitHub...</div>}
+                        
+                        {/* Static option to reset to entire repo */}
+                        <CommandGroup>
+                        <CommandItem
+                            value="entire"
+                            onSelect={() => {
+                            setRankingFileScope('entire');
+                            setOpenFileSearch(false);
+                            setSearchQuery("");
+                            }}
+                        >
+                            <Check className={cn("mr-2 h-4 w-4", rankingFileScope === 'entire' ? "opacity-100" : "opacity-0")} />
+                            Entire Repository
+                        </CommandItem>
+                        </CommandGroup>
+    
+                        {/* Dynamic Search Results */}
+                        <CommandGroup heading="Files">
                         {fileSearchResults.map((path) => (
-                          <CommandItem
+                            <CommandItem
                             key={path}
                             value={path}
-                            onSelect={(currentValue) => {
-                              setSelectedFile(currentValue);
-                              setRankingScope('file');
-                              setOpenFileSearch(false);
+                            onSelect={() => {
+                                setRankingFileScope(path);
+                                setOpenFileSearch(false);
+                                setSearchQuery("");
                             }}
-                          >
-                            <Check className={cn("mr-2 h-4 w-4", selectedFile === path ? "opacity-100" : "opacity-0")} />
+                            >
+                            <Check className={cn("mr-2 h-4 w-4", rankingFileScope === path ? "opacity-100" : "opacity-0")} />
                             <div className="flex flex-col overflow-hidden">
-                              <span className="text-sm font-medium truncate">{path.split('/').pop()}</span>
-                              <span className="text-[10px] text-slate-400 truncate">{path}</span>
+                                <span className="text-sm font-medium truncate">{path.split('/').pop()}</span>
+                                <span className="text-[10px] text-slate-400 truncate">{path}</span>
                             </div>
-                          </CommandItem>
+                            </CommandItem>
                         ))}
-                      </CommandGroup>
+                        </CommandGroup>
+    
+                        {!isSearching && fileSearchResults.length === 0 && searchQuery.length >= 2 && (
+                        <CommandEmpty>No matching files found.</CommandEmpty>
+                        )}
                     </CommandList>
-                  </Command>
+                    </Command>
                 </PopoverContent>
-              </Popover>
+                </Popover>
 
               <Button
                 variant="outline"
@@ -476,21 +499,39 @@ const RepoStatsPage = () => {
                   <TableHead className="w-16">Rank</TableHead>
                   <TableHead>Contributor</TableHead>
                   <TableHead className="text-right">Commits</TableHead>
-                  <TableHead className="text-right">Lines</TableHead>
-                  <TableHead className="text-right">Files</TableHead>
+                  <TableHead className="text-right">Lines Changed</TableHead>
+                  <TableHead className="text-right">Files Changed</TableHead>
                   <TableHead className="text-right font-bold text-blue-600">Atomic Score</TableHead>
                   <TableHead className="w-20"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedContributors.map((c, i) => (
+                {isRankingLoading ? 
+                  (<TableRow key={0}>
+
+                    <TableCell className="font-semibold text-slate-700 text-right">Loading</TableCell>
+                    <TableCell className="font-semibold text-slate-700 text-right">Loading</TableCell>
+                    <TableCell className="font-semibold text-slate-700 text-right">Loading</TableCell>
+                    <TableCell className="font-semibold text-slate-700 text-right">Loading</TableCell>
+                    <TableCell className="font-semibold text-slate-700 text-right">Loading</TableCell>
+                    <TableCell className="font-semibold text-slate-700 text-right">Loading</TableCell>
+                    
+                  </TableRow>)
+                
+                : sortedContributors.map((c, i) => (
                   <TableRow key={i}>
                     <TableCell className="font-mono-bold">#{i + 1}</TableCell>
                     <TableCell className="font-semibold text-slate-700">{c.user}</TableCell>
-                    <TableCell className="text-right">{c.commits}</TableCell>
-                    <TableCell className="text-right text-green-600">+{c.lines}</TableCell>
-                    <TableCell className="text-right">{c.files}</TableCell>
-                    <TableCell className="text-right text-blue-600 font-bold">{c.score}</TableCell>
+                    {rankingMetric == 'commits' ? (<TableCell className="text-right font-bold text-green-600">{c.commits}</TableCell>)
+                      : (<TableCell className="text-right">{c.commits}</TableCell>)}
+                    {rankingMetric == 'lines' ? (<TableCell className="text-right font-bold text-green-600">{c.lines}</TableCell>)
+                      : (<TableCell className="text-right">{c.lines}</TableCell>)}
+                    {rankingMetric == 'files' ? (<TableCell className="text-right font-bold text-green-600">{c.files}</TableCell>)
+                      : (<TableCell className="text-right">{c.files}</TableCell>)}
+                    {rankingMetric == 'score' ? (<TableCell className="text-right font-bold text-green-600">{c.score}</TableCell>)
+                      : (<TableCell className="text-right">{c.score}</TableCell>)}
+                    
+                    
                     <TableCell className="text-right">
                       <Button variant="ghost" size="icon" asChild>
                         <a href={`https://github.com/${owner}/${repoName}/commits?author=${c.user}`} target="_blank" rel="noreferrer">
@@ -500,6 +541,7 @@ const RepoStatsPage = () => {
                     </TableCell>
                   </TableRow>
                 ))}
+                
               </TableBody>
             </Table>
           </Card>
