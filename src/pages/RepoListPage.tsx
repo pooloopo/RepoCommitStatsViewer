@@ -1,14 +1,18 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ExternalLink } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import { fetchUserRepositories, getRateLimitInfo, waitForRateLimitReset } from '../services/githubApi';
-import { type GitHubRepository } from '../services/githubApi';
-import { Button } from '../components/ui/button';
-import { Card } from '../components/ui/card';
-import LoadingSpinner from '../components/LoadingSpinner';
-import RateLimitWarning from '../components/RateLimitWarning';
-import { GitHubLogoIcon } from '@radix-ui/react-icons';
+import { useEffect, useState, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { ExternalLink } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import {
+  fetchUserRepositories,
+  getRateLimitInfo,
+  waitForRateLimitReset,
+} from "../services/githubApi";
+import { type GitHubRepository } from "../services/githubApi";
+import { Button } from "../components/ui/button";
+import { Card } from "../components/ui/card";
+import LoadingSpinner from "../components/LoadingSpinner";
+import RateLimitWarning from "../components/RateLimitWarning";
+import { GitHubLogoIcon } from "@radix-ui/react-icons";
 
 export default function RepoListPage() {
   const navigate = useNavigate();
@@ -26,17 +30,21 @@ export default function RepoListPage() {
     async (pageNum: number = 1) => {
       if (!accessToken || !githubUsername) return;
 
+      // 1. Set loading to true immediately to prevent duplicate triggers
+      setLoading(true);
+
       try {
         setError(null);
-        const response = await fetchUserRepositories(pageNum,"");
+        const response = await fetchUserRepositories(pageNum, "");
         const rateLimit = getRateLimitInfo();
 
         if (pageNum === 1) {
           setRepositories(response.repositories);
         } else {
+          // 2. Append the new repos to the existing list
           setRepositories((prev) => [...prev, ...response.repositories]);
         }
-        //await db.delete(); // Deletes the entire database
+
         setHasMore(response.hasMore);
         setPage(pageNum);
 
@@ -45,20 +53,22 @@ export default function RepoListPage() {
           setRateLimitResetTime(rateLimit.reset);
         }
       } catch (err) {
-        if (err instanceof Error && err.message === 'RATE_LIMIT_EXCEEDED') {
+        if (err instanceof Error && err.message === "RATE_LIMIT_EXCEEDED") {
           const rateLimit = getRateLimitInfo();
           if (rateLimit) {
             setRateLimited(true);
             setRateLimitResetTime(rateLimit.reset);
           }
         } else {
-          setError(err instanceof Error ? err.message : 'Failed to fetch repositories');
+          setError(
+            err instanceof Error ? err.message : "Failed to fetch repositories",
+          );
         }
       } finally {
         setLoading(false);
       }
     },
-    [accessToken, githubUsername]
+    [accessToken, githubUsername],
   );
 
   const handleRetry = useCallback(async () => {
@@ -81,7 +91,7 @@ export default function RepoListPage() {
           fetchRepositories(page + 1);
         }
       },
-      { threshold: 0.1 }
+      { threshold: 0.1 },
     );
 
     if (observerTarget.current) {
@@ -99,7 +109,8 @@ export default function RepoListPage() {
             Your Contributed Repositories
           </h1>
           <p className="text-muted-foreground">
-            Repositories you've contributed to, sorted by most recently contributed
+            Repositories you've contributed to, sorted by most recently
+            contributed
           </p>
         </div>
 
@@ -124,7 +135,8 @@ export default function RepoListPage() {
           <Card className="p-8 text-center border-border">
             <GitHubLogoIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-muted-foreground">
-              No repositories found. Make sure you have contributed to repositories on GitHub.
+              No repositories found. Make sure you have contributed to
+              repositories on GitHub.
             </p>
           </Card>
         ) : (
@@ -133,7 +145,9 @@ export default function RepoListPage() {
               <Card
                 key={repo.id}
                 className="p-4 border-border hover:border-accent hover:bg-muted/50 transition-all cursor-pointer"
-                onClick={() => navigate(`/repo/${repo.owner.login}/${repo.name}`)}
+                onClick={() =>
+                  navigate(`/repo/${repo.owner.login}/${repo.name}`)
+                }
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
@@ -170,35 +184,34 @@ export default function RepoListPage() {
                     className="text-accent hover:text-accent hover:bg-accent/10 flex-shrink-0"
                     onClick={(e) => {
                       e.stopPropagation();
-                      window.open(repo.html_url, '_blank');
+                      window.open(repo.html_url, "_blank");
                     }}
                   >
                     <ExternalLink className="w-4 h-4" />
                   </Button>
                   <div className=" top-4 right-4">
-                  <Button 
-                    asChild 
-                    variant="outline" 
-                    size="sm" 
-                    className="h-8 px-3 bg-[#21262d] border-[#30363d] text-[#c9d1d9] hover:bg-[#30363d] hover:text-white"
-                    onClick={(e) => {
-                    e.stopPropagation();
-                    }}
-                  >
-                    <a 
-                      href={repo.html_url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 text-xs font-medium"
+                    <Button
+                      asChild
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-3 bg-[#21262d] border-[#30363d] text-[#c9d1d9] hover:bg-[#30363d] hover:text-white"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                      }}
                     >
-                      <GitHubLogoIcon className="w-3.5 h-3.5" />
+                      <a
+                        href={repo.html_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-xs font-medium"
+                      >
+                        <GitHubLogoIcon className="w-3.5 h-3.5" />
                         View on GitHub
-                      <ExternalLink className="w-3 h-3 opacity-50" />
-                    </a>
-                  </Button>
+                        <ExternalLink className="w-3 h-3 opacity-50" />
+                      </a>
+                    </Button>
+                  </div>
                 </div>
-                </div>
-                
               </Card>
             ))}
 

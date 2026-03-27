@@ -1,4 +1,4 @@
-import Dexie, { type Table } from 'dexie';
+import Dexie, { type Table } from "dexie";
 
 export interface Repository {
   repoID: string;
@@ -49,13 +49,13 @@ export class RepoCommitStatsDB extends Dexie {
   technicalDebt!: Table<TechnicalDebt>;
 
   constructor() {
-    super('RepoCommitStatsDB');
+    super("RepoCommitStatsDB");
     this.version(1).stores({
-      repositories: 'repoID',
-      commits: 'commitID, repoID',
-      snapshots: '++id, owner, repoName, timestamp, [owner+repoName+timestamp]', // Indexing for fast lookups
-      contributors: 'contributorID',
-      technicalDebt: 'debtID, contributorID, commitID'
+      repositories: "repoID",
+      commits: "commitID, repoID",
+      snapshots: "++id, owner, repoName, timestamp, [owner+repoName+timestamp]", // Indexing for fast lookups
+      contributors: "contributorID",
+      technicalDebt: "debtID, contributorID, commitID",
     });
   }
 }
