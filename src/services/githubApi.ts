@@ -1,6 +1,4 @@
-import type { Table } from "dexie";
 import { Octokit, RequestError } from "octokit";
-import { useAuth } from "@/context/AuthContext";
 
 let octokit: Octokit;
 let githubUsername: string;
@@ -33,15 +31,8 @@ export interface DetailedStats {
   atomicScore: number;
 }
 
-export interface RateLimitInfo {
-  limit: number;
-  remaining: number;
-  reset: number;
-}
-
 export interface FetchRepositoriesResponse {
   repositories: GitHubRepository[];
-  rateLimitInfo: RateLimitInfo;
   hasMore: boolean;
 }
 
@@ -112,46 +103,6 @@ const computeAtomicScore = (files: any[]) => {
   return parseFloat(score.toFixed(1));
 };
 
-let rateLimitState: RateLimitInfo | null = null;
-let rateLimitResetTimer: ReturnType<typeof setTimeout> | null = null;
-
-function parseRateLimitInfo(headers: any): RateLimitInfo {
-  return {
-    limit: parseInt(headers["x-ratelimit-limit"] || "60"),
-    remaining: parseInt(headers["x-ratelimit-remaining"] || "0"),
-    reset: parseInt(headers["x-ratelimit-reset"] || "0") * 1000,
-  };
-}
-
-function updateRateLimitState(rateLimit: RateLimitInfo) {
-  rateLimitState = rateLimit;
-
-  if (rateLimitResetTimer) {
-    clearTimeout(rateLimitResetTimer);
-  }
-
-  if (rateLimit.remaining === 0) {
-    const waitTime = Math.max(rateLimit.reset - Date.now(), 1000);
-    console.log(
-      `Rate limited. Retrying in ${Math.ceil(waitTime / 1000)} seconds`,
-    );
-
-    rateLimitResetTimer = setTimeout(() => {
-      console.log("Rate limit reset, retrying...");
-    }, waitTime);
-  }
-}
-
-export function getRateLimitInfo(): RateLimitInfo | null {
-  return rateLimitState;
-}
-
-export function clearRateLimitState() {
-  if (rateLimitResetTimer) {
-    clearTimeout(rateLimitResetTimer);
-  }
-  rateLimitState = null;
-}
 // Get any Github user data using Github user ID or login username
 export async function getGitHubUserData(githubIdOrLogin: string) {
   const response = await fetch(
@@ -191,9 +142,6 @@ export async function fetchUserRepositories(
     }
     const data = response.data;
 
-    const rateLimit = parseRateLimitInfo(response.headers);
-    updateRateLimitState(rateLimit);
-
     const repositories = data as GitHubRepository[];
 
     // Search repositories for best match
@@ -207,13 +155,11 @@ export async function fetchUserRepositories(
       }
       return {
         repositories: matchingQueryRepos,
-        rateLimitInfo: rateLimit,
         hasMore: matchingQueryRepos.length === perPage,
       };
     }
     return {
       repositories,
-      rateLimitInfo: rateLimit,
       hasMore: repositories.length === perPage,
     };
   } catch (error) {
@@ -227,19 +173,6 @@ export async function fetchUserRepositories(
     } else {
       throw error;
     }
-  }
-}
-
-export async function waitForRateLimitReset(): Promise<void> {
-  if (!rateLimitState || rateLimitState.remaining > 0) {
-    return;
-  }
-
-  const waitTime = Math.max(rateLimitState.reset - Date.now(), 0);
-  if (waitTime > 0) {
-    return new Promise((resolve) => {
-      setTimeout(resolve, waitTime + 100);
-    });
   }
 }
 

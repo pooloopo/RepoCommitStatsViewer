@@ -4,14 +4,11 @@ import { ExternalLink } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import {
   fetchUserRepositories,
-  getRateLimitInfo,
-  waitForRateLimitReset,
 } from "../services/githubApi";
 import { type GitHubRepository } from "../services/githubApi";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import LoadingSpinner from "../components/LoadingSpinner";
-import RateLimitWarning from "../components/RateLimitWarning";
 import { GitHubLogoIcon } from "@radix-ui/react-icons";
 
 export default function RepoListPage() {
@@ -19,8 +16,6 @@ export default function RepoListPage() {
   const { accessToken, githubUsername } = useAuth();
   const [repositories, setRepositories] = useState<GitHubRepository[]>([]);
   const [loading, setLoading] = useState(true);
-  const [rateLimited, setRateLimited] = useState(false);
-  const [rateLimitResetTime, setRateLimitResetTime] = useState(0);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +31,6 @@ export default function RepoListPage() {
       try {
         setError(null);
         const response = await fetchUserRepositories(pageNum, "");
-        const rateLimit = getRateLimitInfo();
 
         if (pageNum === 1) {
           setRepositories(response.repositories);
@@ -48,37 +42,16 @@ export default function RepoListPage() {
         setHasMore(response.hasMore);
         setPage(pageNum);
 
-        if (rateLimit && rateLimit.remaining === 0) {
-          setRateLimited(true);
-          setRateLimitResetTime(rateLimit.reset);
-        }
       } catch (err) {
-        if (err instanceof Error && err.message === "RATE_LIMIT_EXCEEDED") {
-          const rateLimit = getRateLimitInfo();
-          if (rateLimit) {
-            setRateLimited(true);
-            setRateLimitResetTime(rateLimit.reset);
-          }
-        } else {
-          setError(
-            err instanceof Error ? err.message : "Failed to fetch repositories",
-          );
-        }
+        setError(
+          err instanceof Error ? err.message : "Failed to fetch repositories",
+        );
       } finally {
         setLoading(false);
       }
     },
     [accessToken, githubUsername],
   );
-
-  const handleRetry = useCallback(async () => {
-    if (rateLimitResetTime) {
-      await waitForRateLimitReset();
-      setRateLimited(false);
-      setRateLimitResetTime(0);
-      fetchRepositories(page);
-    }
-  }, [rateLimitResetTime, page, fetchRepositories]);
 
   useEffect(() => {
     fetchRepositories(1);
@@ -87,7 +60,7 @@ export default function RepoListPage() {
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loading && !rateLimited) {
+        if (entries[0].isIntersecting && hasMore && !loading) {
           fetchRepositories(page + 1);
         }
       },
@@ -99,7 +72,7 @@ export default function RepoListPage() {
     }
 
     return () => observer.disconnect();
-  }, [page, hasMore, loading, rateLimited, fetchRepositories]);
+  }, [page, hasMore, loading, fetchRepositories]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -118,13 +91,6 @@ export default function RepoListPage() {
           <Card className="mb-6 p-4 border-red-900/50 bg-red-950/30">
             <p className="text-red-200">{error}</p>
           </Card>
-        )}
-
-        {rateLimited && (
-          <RateLimitWarning
-            resetTime={rateLimitResetTime}
-            onRetry={handleRetry}
-          />
         )}
 
         {loading && repositories.length === 0 ? (

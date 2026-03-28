@@ -76,57 +76,6 @@ import Dexie from "dexie";
 
 type Metric = "commits" | "lines" | "files" | "score";
 
-// Mock Data
-const MOCK_FILES = [
-  "src/pages/RepoStatsPage.tsx",
-  "src/App.tsx",
-  "package.json",
-  "src/components/ui/button.tsx",
-  "public/index.html",
-  "src/lib/utils.ts",
-];
-
-const MOCK_GRAPH_DATA = [
-  { day: "Mon", commits: 5, lines: 450, files: 3, score: 7.2 },
-  { day: "Tue", commits: 8, lines: 1200, files: 12, score: 8.5 },
-  { day: "Wed", commits: 3, lines: 150, files: 2, score: 6.8 },
-  { day: "Thu", commits: 12, lines: 2100, files: 18, score: 9.1 },
-  { day: "Fri", commits: 7, lines: 800, files: 9, score: 8.0 },
-  { day: "Sat", commits: 1, lines: 50, files: 1, score: 5.5 },
-  { day: "Sun", commits: 2, lines: 110, files: 2, score: 6.2 },
-  { day: "12", commits: 2, lines: 110, files: 2, score: 6.2 },
-];
-
-const MOCK_CONTRIBUTORS = [
-  {
-    id: 1,
-    user: "pooloopo",
-    commits: 45,
-    lines: 3200,
-    files: 28,
-    score: 8.9,
-    topFile: "src/App.tsx",
-  },
-  {
-    id: 2,
-    user: "octocat",
-    commits: 32,
-    lines: 1800,
-    files: 15,
-    score: 7.4,
-    topFile: "package.json",
-  },
-  {
-    id: 3,
-    user: "dev-alpha",
-    commits: 12,
-    lines: 4500,
-    files: 40,
-    score: 9.5,
-    topFile: "src/pages/RepoStatsPage.tsx",
-  },
-];
-
 const RepoStatsPage = () => {
   const { owner, repoName } = useParams();
   const navigate = useNavigate();
@@ -177,7 +126,6 @@ const RepoStatsPage = () => {
     if (!owner || !repoName) return;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const dayTimestamp = today.getTime();
 
     const history = await db.snapshots
       .where("[owner+repoName+timestamp]")
