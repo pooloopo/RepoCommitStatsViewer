@@ -127,35 +127,39 @@ const RepoStatsPage = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const history = await db.snapshots
-      .where("[owner+repoName+timestamp]")
-      .between(
-        [owner, repoName, Dexie.minKey], // Start range
-        [owner, repoName, Dexie.maxKey], // End range
-      )
-      .toArray();
+    if (await db.snapshots.count() > 0){
+      const history = await db.snapshots
+        .where("[owner+repoName+timestamp]")
+        .between(
+          [owner, repoName, Dexie.minKey], // Start range
+          [owner, repoName, Dexie.maxKey], // End range
+        )
+        .toArray();
+      
+      if (history.length > 0) {
+        // Format for Recharts
+        const formatted = history
+          .map((s) => ({
+            day: new Date(s.timestamp).toLocaleDateString(undefined, {
+              month: "short",
+              day: "numeric",
+            }),
+            commits: s.commits,
+            lines: s.lines,
+            files: s.files,
+            score: s.atomicScore,
+            fullDate: s.timestamp, // for sorting
+          }))
+          .sort((a, b) => a.fullDate - b.fullDate);
 
-    if (history.length > 0) {
-      // Format for Recharts
-      const formatted = history
-        .map((s) => ({
-          day: new Date(s.timestamp).toLocaleDateString(undefined, {
-            month: "short",
-            day: "numeric",
-          }),
-          commits: s.commits,
-          lines: s.lines,
-          files: s.files,
-          score: s.atomicScore,
-          fullDate: s.timestamp, // for sorting
-        }))
-        .sort((a, b) => a.fullDate - b.fullDate);
-
-      setGraphData(formatted);
-    } else {
-      // Fallback if no snapshots exist yet
-      setGraphData([]);
+        setGraphData(formatted);
+        // Only return out of function if history data exists, otherwise setGraphData([])
+        return;
+      }
     }
+
+    // Fallback if no snapshots exist yet
+    setGraphData([]);
   };
 
   useEffect(() => {
@@ -171,14 +175,7 @@ const RepoStatsPage = () => {
     today.setHours(0, 0, 0, 0);
     const dayTimestamp = today.getTime();
 
-    try {
-      // Check if a snapshot for THIS repo and THIS day already exists
-      const existingSnapshot = await db.snapshots
-        .where("[owner+repoName+timestamp]")
-        .equals([owner, repoName, dayTimestamp])
-        .first();
-
-      const snapshotData = {
+    const snapshotData = {
         owner: owner,
         repoName: repoName,
         timestamp: dayTimestamp,
@@ -188,13 +185,23 @@ const RepoStatsPage = () => {
         atomicScore: stats24h.atomicScore,
       };
 
+    if (await db.snapshots.count() < 1){
+      // Create new record
+        await db.snapshots.add(snapshotData);
+        // Exit function without continuing because snapshot was just created
+        return;
+    }
+    try {
+      // Check if a snapshot for THIS repo and THIS day already exists
+      const existingSnapshot = await db.snapshots
+        .where("[owner+repoName+timestamp]")
+        .equals([owner, repoName, dayTimestamp])
+        .first();
+
       if (existingSnapshot?.id) {
         // Update existing record
         await db.snapshots.update(existingSnapshot.id, snapshotData);
         if (clicked) alert("Updated today's snapshot.");
-      } else {
-        // Create new record
-        await db.snapshots.add(snapshotData);
       }
 
       // Refresh graph
