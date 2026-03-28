@@ -410,7 +410,7 @@ const RepoStatsPage = () => {
         <Card className="bg-white border-slate-200 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between border-b border-slate-50 pb-6">
             <div>
-              <CardTitle>Project Velocity</CardTitle>
+              <CardTitle>Progress Velocity</CardTitle>
               <CardDescription>
                 Visualizing {metricLabels[graphMetric]} trends
               </CardDescription>
