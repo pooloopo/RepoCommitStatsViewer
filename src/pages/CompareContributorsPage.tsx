@@ -1,8 +1,7 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
-  Download,
   GitCommit,
   FileCode,
   Activity,
@@ -10,11 +9,7 @@ import {
   Check,
   ChevronsUpDown,
   Users,
-  Info,
-  Trash2,
   Trophy,
-  Search,
-  FileText,
 } from "lucide-react";
 
 // Shadcn UI
@@ -22,13 +17,9 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
 } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import {
   Command,
@@ -50,45 +41,11 @@ import {
   type ContributorStats,
 } from "@/services/githubApi";
 
-// --- MOCK DATA FOR EASY REPLACEMENT LATER ---
-const MOCK_CONTRIBUTORS = [
-  {
-    login: "pooloopo",
-    name: "Pooloopo",
-    avatar: "https://github.com/pooloopo.png",
-  },
-  {
-    login: "octocat",
-    name: "The Octocat",
-    avatar: "https://github.com/octocat.png",
-  },
-  { login: "shadcn", name: "Shadcn", avatar: "https://github.com/shadcn.png" },
-  {
-    login: "dev-ninja",
-    name: "Dev Ninja",
-    avatar: "https://github.com/identicons/dev.png",
-  },
-];
-
-const MOCK_FILES = [
-  "src/App.tsx",
-  "src/components/ui/button.tsx",
-  "src/pages/RepoStatsPage.tsx",
-  "package.json",
-];
-
-const MOCK_STATS: Record<string, any> = {
-  pooloopo: { commits: 342, lines: 15420, files: 45, atomicScore: 8.4 },
-  octocat: { commits: 128, lines: 5200, files: 12, atomicScore: 9.1 },
-  shadcn: { commits: 89, lines: 12050, files: 8, atomicScore: 7.5 },
-  "dev-ninja": { commits: 450, lines: 8000, files: 112, atomicScore: 6.2 },
-};
-
 export default function CompareContributorsPage() {
   const { owner, repoName } = useParams();
   const navigate = useNavigate();
 
-  // 1. Initialize as objects so the Avatar works immediately
+  // Initialize as objects so the Avatar works immediately
   const [user1, setUser1] = useState({
     login: "Search Here",
     avatar: "https://github.com/pooloopo.png",
@@ -98,12 +55,12 @@ export default function CompareContributorsPage() {
     avatar: "https://github.com/octocat.png",
   });
 
-  // 2. Add state for the dynamic search results
+  // Add state for the dynamic search results
   const [userSearchResults, setUserSearchResults] = useState<any[]>([]);
   const [isSearchingUsers, setIsSearchingUsers] = useState(false);
   const [userSearchTerm, setUserSearchTerm] = useState("");
 
-  // 3. Create the search handler
+  // Create the search handler
   const handleUserSearch = async (query: string) => {
     setUserSearchTerm(query);
 
@@ -122,7 +79,7 @@ export default function CompareContributorsPage() {
     }
   };
 
-  // 2. Update stats effect to use user.login
+  // Update stats effect to use user.login
   useEffect(() => {
     const loadData = async () => {
       if (owner && repoName) {
@@ -198,12 +155,6 @@ export default function CompareContributorsPage() {
 
     loadData();
   }, [user1, user2, fileScope, owner, repoName]);
-
-  const handleExportCSV = () => {
-    // Placeholder for SC8 functionality
-    console.log("Exporting CSV for", user1, "and", user2);
-    alert("CSV Download started!");
-  };
 
   // --- Helper Components ---
 
@@ -416,14 +367,6 @@ export default function CompareContributorsPage() {
               </PopoverContent>
             </Popover>
           </div>
-
-          <Button
-            variant="outline"
-            size="sm"
-            //onClick={() => downloadCSV(graphData, "velocity_data.csv", "Day,Commits,Lines,Files,Score")}
-          >
-            <Download className="w-4 h-4 mr-2" /> Export Comparison (CSV)
-          </Button>
         </div>
 
         {/* 3. LEGEND */}

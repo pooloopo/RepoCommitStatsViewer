@@ -30,7 +30,7 @@ export default function RepoListPage() {
     async (pageNum: number = 1) => {
       if (!accessToken || !githubUsername) return;
 
-      // 1. Set loading to true immediately to prevent duplicate triggers
+      // Set loading to true immediately to prevent duplicate triggers
       setLoading(true);
 
       try {
@@ -41,7 +41,7 @@ export default function RepoListPage() {
         if (pageNum === 1) {
           setRepositories(response.repositories);
         } else {
-          // 2. Append the new repos to the existing list
+          // Append the new repos to the existing list
           setRepositories((prev) => [...prev, ...response.repositories]);
         }
 
@@ -215,6 +215,7 @@ export default function RepoListPage() {
               </Card>
             ))}
 
+            {/* Render Spinner when hasMore is true */}
             {hasMore && (
               <div ref={observerTarget} className="flex justify-center py-8">
                 <LoadingSpinner />

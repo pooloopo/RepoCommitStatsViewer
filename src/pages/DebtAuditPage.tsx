@@ -3,18 +3,14 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   ShieldAlert,
-  Search,
   GitCommit,
   FileCode,
   Activity,
   ChevronDown,
   ExternalLink,
-  Calendar,
   User,
   FileSearch,
-  MoreHorizontal,
   Clock,
-  Hash,
   Check,
   ChevronsUpDown,
 } from "lucide-react";
@@ -26,7 +22,6 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from "@/components/ui/card";
 import {
   Select,
@@ -60,46 +55,6 @@ import {
 } from "@/components/ui/popover";
 // Import the search function we created earlier
 import { searchRepoFiles } from "@/services/githubApi";
-
-// --- Mock Data ---
-const MOCK_DEBT_DATA = [
-  {
-    sha: "a1b2c3d4",
-    user: "pooloopo",
-    avatar: "https://github.com/pooloopo.png",
-    date: "2024-03-20T14:30:00Z",
-    fileName: "src/services/githubApi.ts",
-    linesChanged: 142,
-    filesChanged: 3,
-    score: 8.2,
-    occurrences: [
-      {
-        lineNum: 42,
-        content: "// TODO: Implement robust error handling for rate limits",
-      },
-      { lineNum: 58, content: "// TODO: Refactor this to use a custom hook" },
-      { lineNum: 104, content: "// TODO: Cache these results in IndexedDB" },
-      { lineNum: 110, content: "// TODO: Add retry logic for search endpoint" },
-      { lineNum: 125, content: "// TODO: Cleanup old observers" },
-    ],
-  },
-  {
-    sha: "e5f6g7h8",
-    user: "octocat",
-    avatar: "https://github.com/octocat.png",
-    date: "2024-03-19T09:15:00Z",
-    fileName: "src/pages/RepoStatsPage.tsx",
-    linesChanged: 45,
-    filesChanged: 1,
-    score: 9.5,
-    occurrences: [
-      {
-        lineNum: 12,
-        content: "// TODO: Move mock data to external constants file",
-      },
-    ],
-  },
-];
 
 // --- Sub-Component: Code Snippet Viewer ---
 const SnippetViewer = ({ occurrences }: { occurrences: DebtOccurrence[] }) => {
