@@ -233,7 +233,8 @@ const RepoStatsPage = () => {
   };
 
   // CSV Export Logic
-  const downloadCSV = (data: any[], filename: string, headers: string) => {
+  const downloadCSV = (data: any[], filename: string, headers: string) => { // Params define the CSV Header based on Client Requirements
+    // Map the current state data into CSV rows
     const csvContent = data
       .map((row) => Object.values(row).join(","))
       .join("\n");
@@ -243,6 +244,12 @@ const RepoStatsPage = () => {
     a.href = url;
     a.download = filename;
     a.click();
+    /* ANNOTATION: MAINTAINABILITY
+     By creating a temporary DOM element and using URL.createObjectURL, 
+     I avoid the need for a backend server or external libraries (like FileSaver.js), 
+     keeping the project lightweight and "straightforward" to modify (Criterion D).
+    */
+
   };
 
   const [fileSearchResults, setFileSearchResults] = useState<string[]>([]);

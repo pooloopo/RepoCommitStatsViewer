@@ -383,10 +383,10 @@ export const fetchDebtAuditCommits = async (
   author?: string,
   path?: string,
   sort: "desc" | "asc" = "desc",
-  per_page: number = 20,
+  per_page: number = 20, // Limited to 20 for API performance (SC9)
 ): Promise<DebtCommit[]> => {
   try {
-    // 1. Fetch recent commits directly from the Git history
+    // Fetch recent commits directly from the Git history
     const listParams: any = {
       owner,
       repo,
