@@ -66,10 +66,6 @@ export default function LoginPage() {
             </>
           )}
         </Button>
-
-        <p className="text-center text-sm text-muted-foreground mt-6">
-          We only access your public repository data.
-        </p>
       </div>
     </div>
   );

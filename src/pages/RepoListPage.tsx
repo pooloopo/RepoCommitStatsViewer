@@ -50,12 +50,12 @@ export default function RepoListPage() {
         setLoading(false);
       }
     },
-    [accessToken, githubUsername],
+    [accessToken, githubUsername], // Fetch repositories when user logins, detected by githubUserName change
   );
 
   useEffect(() => {
     fetchRepositories(1);
-  }, []);
+  }, [githubUsername]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
