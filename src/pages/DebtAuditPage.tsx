@@ -39,7 +39,7 @@ import {
   type DebtOccurrence,
 } from "@/services/githubApi";
 
-import { cn } from "@/lib/utils"; // Ensure you have this utility for Shadcn
+import { cn } from "@/lib/utils";
 import {
   Command,
   CommandEmpty,

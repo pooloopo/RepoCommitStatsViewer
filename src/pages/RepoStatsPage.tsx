@@ -5,7 +5,6 @@ import {
   GitCommit,
   FileCode,
   Activity,
-  Save,
   ExternalLink,
   ShieldAlert,
   Download,
@@ -166,8 +165,7 @@ const RepoStatsPage = () => {
     loadHistoricalData();
   }, [owner, repoName]);
 
-  //Show alert if clicked
-  const saveDailySnapshot = async (clicked: boolean) => {
+  const saveDailySnapshot = async () => {
     if (!owner || !repoName || !stats24h) return;
 
     // Get the start of the current day (00:00:00)
@@ -201,7 +199,6 @@ const RepoStatsPage = () => {
       if (existingSnapshot?.id) {
         // Update existing record
         await db.snapshots.update(existingSnapshot.id, snapshotData);
-        if (clicked) alert("Updated today's snapshot.");
       }
 
       // Refresh graph
@@ -214,7 +211,7 @@ const RepoStatsPage = () => {
   // Auto-snapshot when stats arrive
   useEffect(() => {
     if (stats24h && !loadingStats) {
-      saveDailySnapshot(false); //Don't show alert since the action wasn't clicked
+      saveDailySnapshot();
     }
   }, [stats24h, loadingStats]); // Only triggers when stats are populated
 
@@ -366,17 +363,6 @@ const RepoStatsPage = () => {
               className="border-amber-200 text-amber-700 hover:bg-amber-50"
             >
               <ShieldAlert className="w-4 h-4 mr-2" /> Debt Audit
-            </Button>
-
-            <Button
-              onClick={() => saveDailySnapshot(true)}
-              disabled={!stats7d}
-              size="sm"
-              className="bg-green-600 hover:bg-green-700 text-white"
-            >
-              <Save className="w-4 h-4 mr-2" />
-              {/* Logic: If stats are loading, show "Processing..." */}
-              {!stats24h ? "Loading Stats..." : "Sync Daily Snapshot"}
             </Button>
           </div>
         </header>

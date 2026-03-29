@@ -10,7 +10,6 @@ import {
 import { Octokit } from "octokit";
 import {
   getGitHubUserData,
-  setGithubUsernameForGithubAPI,
   setOctokit,
 } from "../services/githubApi";
 
@@ -41,18 +40,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }),
     );
   }, [accessToken]);
-  useEffect(() => {
-    // This runs every time 'githubUsername' changes
 
-    setGithubUsernameForGithubAPI(githubUsername || "");
-  }, [githubUsername]);
   if (accessToken)
     setOctokit(
       new Octokit({
         auth: accessToken, // My GitHub OAuth token from Firebase
       }),
     );
-  if (githubUsername) setGithubUsernameForGithubAPI(githubUsername || "");
 
   useEffect(() => {
     const savedToken = localStorage.getItem("github_access_token");

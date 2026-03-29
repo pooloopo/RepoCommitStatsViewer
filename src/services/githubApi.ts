@@ -1,13 +1,9 @@
 import { Octokit, RequestError } from "octokit";
 
 let octokit: Octokit;
-let githubUsername: string;
 
 export const setOctokit = (newOctoKit: Octokit) => {
   octokit = newOctoKit;
-};
-export const setGithubUsernameForGithubAPI = (newGithubUsername: string) => {
-  githubUsername = newGithubUsername;
 };
 
 export interface GitHubRepository {
@@ -36,9 +32,7 @@ export interface FetchRepositoriesResponse {
   hasMore: boolean;
 }
 
-/**
- * Calculates Atomic Score based on: (LogicLines * 1.2 + StyleLines * 0.3) / sqrt(filesChanged)
- */
+// Calculates Atomic Score based on: (LogicLines * 1.2 + StyleLines * 0.3) / sqrt(filesChanged)
 const computeAtomicScore = (files: any[]) => {
   if (!files || files.length === 0) return 0;
 
@@ -46,29 +40,10 @@ const computeAtomicScore = (files: any[]) => {
   let styleLines = 0;
 
   const logicExtensions = [
-    ".ts",
-    ".tsx",
-    ".js",
-    ".jsx",
-    ".py",
-    ".java",
-    ".c",
-    ".cpp",
-    ".h",
-    ".go",
-    ".rs",
-    ".php",
+    ".ts", ".tsx", ".js", ".jsx", ".py", ".java", ".c", ".cpp", ".h", ".go", ".rs", ".php",
   ];
   const styleExtensions = [
-    ".css",
-    ".scss",
-    ".sass",
-    ".less",
-    ".html",
-    ".json",
-    ".yaml",
-    ".yml",
-    ".md",
+    ".css", ".scss", ".sass", ".less", ".html", ".json", ".yaml", ".yml", ".md",
   ];
 
   files.forEach((file) => {
@@ -97,7 +72,8 @@ const computeAtomicScore = (files: any[]) => {
   });
 
   const filesChanged = files.length;
-  const score = (logicLines * 1.2 + styleLines * 0.3) / Math.sqrt(filesChanged);
+  // Multipliers can be modified to change scoring weight
+  const score = (logicLines * 1.2 + styleLines * 0.3) / Math.sqrt(filesChanged); 
 
   // Return formatted to 1 decimal place, capped at a reasonable max (e.g. 10) if desired
   return parseFloat(score.toFixed(1));
@@ -188,15 +164,15 @@ export const getTotalRepoCommits = async (
       page: 1, // Start at page 1
     });
 
-    // 1. Access the 'link' header from the response
+    // Access the 'link' header from the response
     const linkHeader = response.headers.link;
 
-    // 2. If there is no link header, it means there is only 1 page (0 or 1 commit)
+    // If there is no link header, it means there is only 1 page (0 or 1 commit)
     if (!linkHeader) {
       return response.data.length;
     }
 
-    // 3. Use Regex to find the 'last' page number in the string
+    // Use Regex to find the 'last' page number in the string
     // The string looks like: <...&page=1248>; rel="last"
     const match = linkHeader.match(/page=(\d+)>; rel="last"/);
 
@@ -226,7 +202,7 @@ export const fetchStatsForTimeframe = async (
     const since = new Date();
     since.setDate(since.getDate() - days);
 
-    // 1. Get all commit SHAs in the timeframe
+    // Get all commit SHAs in the timeframe
     const commits = await octokit.paginate(octokit.rest.repos.listCommits, {
       owner,
       repo,
@@ -238,7 +214,7 @@ export const fetchStatsForTimeframe = async (
     let totalFiles = 0;
     let totalAtomicScore = 0;
 
-    // 2. To get lines/files, we need the "detailed" commit for each SHA
+    // To get lines/files, we need the "detailed" commit for each SHA
     // Note: For large repos, this hits rate limits. We limit to the first 20 for safety in this demo.
     const detailsToFetch = commits.slice(0, 20);
 
@@ -252,7 +228,6 @@ export const fetchStatsForTimeframe = async (
       totalLines += res.data.stats?.total || 0;
       totalFiles += res.data.files?.length || 0;
 
-      // MOCK ATOMIC SCORE LOGIC (Example for your IA)
       // High score if changes are small and focused (Atomic)
       const commitScore = computeAtomicScore(res.data.files! || []);
       totalAtomicScore += commitScore;
@@ -321,7 +296,7 @@ export const fetchContributorRankings = async (
   path?: string,
 ): Promise<any[]> => {
   try {
-    // 1. Fetch commits. If path exists, GitHub filters commits by that file.
+    // Fetch commits. If path exists, GitHub filters commits by that file.
     const response = await octokit.paginate(octokit.rest.repos.listCommits, {
       owner,
       repo,
@@ -329,7 +304,7 @@ export const fetchContributorRankings = async (
       per_page: 100, // Default entries, prevents long load from searching commits with atomic score
     });
 
-    // 2. Aggregate stats into a Map
+    // Aggregate stats into a Map
     const contributorMap = new Map();
 
     // To get lines changed (additions/deletions), we need detailed commit info.
@@ -431,18 +406,17 @@ export const fetchDebtAuditCommits = async (
       commits = commits.reverse();
     }
 
-    // 2. Fetch the detailed patch for each commit concurrently
+    // Fetch the detailed patch for each commit concurrently
     const detailedCommits: DebtCommit[] = [];
 
     // We use Promise.all to fetch the details concurrently.
-    // (In a massive production app, you'd batch these to protect rate limits)
     const commitDetails = await Promise.all(
       commits.map(async (c) => {
         return await octokit.rest.repos.getCommit({ owner, repo, ref: c.sha });
       }),
     );
 
-    // 3. Manually scan the diffs (patches) for the keyword
+    // Manually scan the diffs (patches) for the keyword
     for (const detailRes of commitDetails) {
       const files = detailRes.data.files || [];
       let occurrences: DebtOccurrence[] = [];
@@ -508,11 +482,7 @@ export const fetchDebtAuditCommits = async (
   }
 };
 
-// githubApi.ts
-
-/**
- * Searches for contributors within a specific repository.
- */
+// Searches for contributors within a specific repository.
 export const searchRepoContributors = async (
   owner: string,
   repo: string,
@@ -521,7 +491,7 @@ export const searchRepoContributors = async (
   if (!query) return [];
 
   try {
-    // 1. Fetch contributors for this specific repository
+    // Fetch contributors for this specific repository
     // Note: We fetch the top 100 contributors to keep the search responsive
     const { data: contributors } = await octokit.rest.repos.listContributors({
       owner,
@@ -534,7 +504,7 @@ export const searchRepoContributors = async (
       user.login?.toLowerCase().includes(query.toLowerCase()),
     );
 
-    // 3. Map to the format used by your UserSelector
+    // 3. Map to the format used by UserSelector
     return filtered.map((user) => ({
       login: user.login,
       avatar: user.avatar_url,
@@ -559,7 +529,7 @@ export const fetchContributorStats = async (
   path?: string,
 ): Promise<ContributorStats> => {
   try {
-    // 1. Fetch the list of commits for this specific author
+    // Fetch the list of commits for this specific author
     // 'path' will filter commits to only those touching a specific file if provided
     const { data: commitList } = await octokit.rest.repos.listCommits({
       owner,
@@ -573,7 +543,7 @@ export const fetchContributorStats = async (
     let totalFiles = 0;
     let totalAtomicScore = 0;
 
-    // 2. Fetch details for each commit to get additions/deletions/files
+    // Fetch details for each commit to get additions/deletions/files
     // Note: This can be heavy on the rate limit
     const detailPromises = commitList.map((c) =>
       octokit.rest.repos.getCommit({
